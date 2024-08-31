@@ -1,0 +1,278 @@
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+}
+
+#header {
+    display: flex;
+    flex-direction: row;
+}
+
+#left-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 300px;
+    z-index: 9997;
+    padding: 0 15px;
+    background: #c5d0db;
+    overflow-y: auto;
+}
+
+.sidebar-content {
+    margin-top: -50px;
+    text-align: center;
+}
+
+.sidebar-content h2 {
+    font-size: 24px;
+    margin-top: 0px;
+    margin-bottom: 40px;
+    font-weight: 600;
+    font-family: "Poppins", sans-serif;
+    color: #042787;
+    text-align: center;
+}
+
+.sidebar-content h1 {
+    font-size: 20px;
+    margin-top: 0px;
+    margin-bottom: 40px;
+    font-weight: 600;
+    font-family: "Poppins", sans-serif;
+    color: #2e224a;
+    text-align: center;
+}
+
+.sidebar-content label {
+    display: inline-block;
+    width: 120px;
+    margin-bottom: 10px;
+}
+
+.sidebar-content input[type="text"],
+.sidebar-content input[type="number"],
+.sidebar-content select {
+    width: calc(100% - 150px);
+    padding: 5px;
+    margin-top: 5px;
+    margin-bottom: 10px;
+    display: inline-block;
+    box-sizing: border-box;
+}
+
+.sidebar-content button {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    width: calc(100% - 20px);
+    padding: 10px;
+    background-color: #2a2ea9;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+.sidebar-content button:hover {
+    background-color: #2a2ea9;
+}
+
+.flex-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-left: 320px; /* Adjusted to ensure no overlap */
+    width: calc(100% - 320px); /* Adjusted to ensure no overlap */
+}
+.toggle-buttons .toggle-button {
+    padding: 10px;
+    margin: 5px;
+    border: 1px solid #ccc;
+    background-color: #f9f9f9;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.toggle-buttons .toggle-button.selected {
+    background-color: #007bff;
+    color: #fff;
+}
+#generate-characteristics {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    width: calc(100% - 20px);
+    padding: 10px;
+    background-color: #2a2ea9;
+    color: #fff;
+    border: none;
+    cursor: pointer;
+}
+
+
+/* Styling for the table */
+#antennaTable {
+    margin-top: 20px;
+    width: 100%;
+    border-collapse: collapse;
+    display: none; /* Initially hide the table */
+}
+
+#antennaTable th, #antennaTable td {
+    border: 1px solid #ddd;
+    padding: 8px;
+}
+
+#antennaTable th {
+    background-color: #f2f2f2;
+}
+ /* Styling for the modal */
+ .modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; /* High z-index to be above other content */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.4); /* Dark background to dim the rest of the page */
+}
+
+/* Centered modal content */
+.modal {
+    display: none; 
+    position: fixed; 
+    z-index: 1000; /* High z-index to be above other content */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; 
+    background-color: rgba(0,0,0,0.4); /* Dark background to dim the rest of the page */
+}
+
+/* Centered modal content */
+.modal-content {
+    background-color: white;
+    width: 50%;
+    max-height: 700px; /* Set max height to prevent overflow */
+    overflow-y: auto; /* Allow scrolling if content overflows */
+    margin: 10% auto; /* Center the modal horizontally */
+    margin-left: 30%; /* Shift the modal slightly to the left */
+    padding: 20px; /* Add padding for content spacing */
+    border-radius: 8px; /* Optional: Add rounded corners */
+    border: 1px solid #888; /* Optional: Add border */
+}
+
+.close {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+.close:hover,
+.close:focus {
+    color: black;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.spinner {
+    border: 8px solid #090303;
+    border-radius: 50%;
+    border-top: 8px solid #db3434;
+    width: 60px;
+    height: 60px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+#map-container {
+    width: 90%;
+    height: 700px;
+    margin: 10px 75px 10px 100px;
+}
+.custom-map-control-button {
+    background: #fff;
+    border: 2px solid #fff;
+    border-radius: 0px;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    margin-top: 10px;
+    margin-left: -352px;
+    margin-right: 300px;
+    text-align: center;
+    padding: 9px 15px; /* Increase padding */
+    font-size: 16px; /* Increase font size */
+  }
+
+#line-info {
+    margin-left: 100px;
+    margin-right: 75px;
+    display: none;
+    position: fixed;
+    bottom: 0;
+    width: 70%; /* Full width */
+    height: 30%; /* Half of the map's height */
+    background-color: #fff;
+    border-top: 10px solid #0a0a0a; /* Correct border style */
+    padding: 10px; /* Added padding for better spacing */
+    box-shadow: 0 -2px 5px rgba(0,0,0,0.1); /* Corrected box-shadow */
+    display: flex; /* Changed to flex to enable flexbox properties */
+    justify-content: space-between;
+    align-items: flex-start;
+}
+#antennaTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#antennaTable th, #antennaTable td {
+    border: 1px solid #2916d0;
+    padding: 8px;
+}
+
+#antennaTable th {
+    background-color: #1010c6;
+}
+
+
+#line-information {
+    margin-left: 20px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: 40%; /* Adjusted width for better layout */
+    background-color: #f9f8f8;
+    border: 1px solid #070707; /* Corrected border style */
+    padding: 10px; /* Added padding for better spacing */
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1); /* Corrected box-shadow */
+}
+
+#elevation-chart {
+    margin-right: 50px;
+    margin-top: 20px;
+    width: 90%; /* Adjusted width for better layout */
+    height: calc(100% - 40px); /* Adjusted height to fill container */
+    background-color: #c2bdd5;
+}
+
+
+@media screen and (max-width: 768px) {
+    #left-sidebar {
+        width: 100%;
+        height: auto;
+        position: relative;
+    }
+    .flex-container {
+        margin-left: 0;
+        width: 100%;
+    }
+    #map-container {
+        width: 100%;
+        height: 500px; /* Adjust height as needed for smaller screens */
+    }
+}

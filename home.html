@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#ff4444">
+    <title>Topology Dashboard</title>
+    <link rel="stylesheet" href="css/home.css">
+    <script src = "js/geoxml3.js" ></script>
+    <script src = "https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
+</head>
+<body>
+<!-- ======= Header ======= -->
+<header id="header">
+    <div class="d-flex flex-column">
+        <aside id="left-sidebar">
+            <div class="sidebar-content">
+                <img src="media/luceor_logo.png" alt="Luceor Logo">
+                <h2>Create Your Network Topology</h2>
+                <div class="upload_kml_file" >
+                    <form enctype="multipart/form-data">
+                        <input id="file" name="file" type="file" />
+                        <button  type="button" id="upload_file">Upload KML file</button>
+                    </form>
+                </div>
+                <div id="layer-controls"></div>
+                <div id="layer-control" >
+                    <h2>Select Source and Destination Layers</h2>
+                    <div class="source-layers">
+                        <label for="sourceLayers">Source Layers:</label>
+                        <select id="sourceLayers" name="sourceLayers" multiple required>
+                            
+                        </select>
+                    </div>
+                    <div class="dest-layers">
+                        <label for="destLayers">Destination Layers:</label>
+                        <select id="destLayers" name="destLayers" multiple required>
+                        </select>
+                    </div>
+                    <button type="button" id="processLayers">Process Layers</button>
+                </div>
+                <div class="max_dist_threshold" >
+                    <label for="distanceSlider">Select Distance (km):</label>
+                    <input type="range" id="distanceSlider" min="1" max="100" value="50" step="1">
+                    <span id="distanceValue">50 km</span>
+                    <button type="button" id="submit_thresh">Submit threshold</button>
+                </div>
+
+                <div class="topology-container" >
+                    <button type="button" id="generate-topology">Generate Topology</button>
+                </div>
+
+                
+                
+                <div class="antenna_characteristics" style="display: none;">
+                    <button type="button" id="generate-characteristics">Topology characteristics</button>
+                </div>
+
+
+                <div class="download_button" >
+                    <button type="button" id="download_button">Download Topology</button>
+                </div>
+            </div>
+        </aside>
+    </div>
+    <section id="sensorContainer" class="flex-container">
+        <div id="map-container" class="map-container">
+            <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBeya4HQeQc6Ps1nROlox3qrQV3fbrJRAc&v=beta&libraries=drawing&callback=initMap"></script>
+        </div>
+        <div id="loading-spinner" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000;">
+            <div class="spinner"></div>
+        </div>
+        <div id="line-info" style="display: none;">
+            <span id="line-information"></span> 
+            <canvas id="elevation-chart"></canvas>
+            <button id="close-line-info">✖</button>
+        </div>
+    </section>
+</header>
+<div id="myModal" class="modal">
+    <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Antenna Parameters</h2>
+        <table id="antennaTable">
+            <thead>
+                <tr>
+                    <th>Node Id</th>
+                    <th>Name</th>
+                    <th>Router Type</th>
+                    <th>Roles</th>
+                    <th>horizontal Azimuth</th>
+                    <th>Vertical Azimuth</th>
+                    <th>Channel</th>
+                </tr>
+            </thead>
+            <tbody id="antennaTableBody">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let map;
+    let elevator;
+    let drawingManager;
+    let markers = [];
+    let lines   = [];
+    let triangles= [];
+    let positions = [];
+    let positions_map = [];
+    let desired_rates = [];
+    let chartInstance;
+    let generateTopologyClicked = false;
+    let marker1 = null;
+    let marker2 = null;
+    let drawingModeEnabled = false;
+    let channel_colors = {};
+    let bandwidth = 20*1e6;
+    let available_channels = [52,  60,  100];
+    let roles = [];
+    let horizontal_azimuths =[];
+    let vertical_azimuths=[];
+    let router_type =[];
+    let channel_links = [];
+    let upload  =false;
+    let path_elevations = [];
+    let distances       = [];
+    let marker_index    =  new Map();
+    let dist_thresh     = 0;
+    let total_labels    = [];
+    let samples         = 30;
+    let final_connections = [];
+    let sz_src;
+    let obligatory_nodes = [];
+    let node_capacities  = [];
+    let total_markers    = [];
+    let position_labels  = [];
+    let layers_positions = {};
+    let layers_positions_map ={}; 
+    let markers_name_per_layer = {};
+    let marker_names = [];
+    let connections      = [];
+    let layers           = { };
+    let layerControls    = {};
+    let xmlContent       = '';
+    let xmlDoc ;
+    let global_max_threshold = 8;
+
+
+    async function initMap() {
+            const position = { lat: 29.062921862351214, lng: 40.61478545935556 };
+            let map = new google.maps.Map(document.getElementById("map-container"), {
+                zoom: 6,
+                center: position,
+                mapTypeId: "roadmap", 
+            });
+            elevator = new google.maps.ElevationService();
+            drawingManager = new google.maps.drawing.DrawingManager({
+                drawingMode: google.maps.drawing.OverlayType.POLYLINE,
+                drawingControl: false,
+                polylineOptions: {
+                strokeColor: '#ff0000',
+                strokeWeight: 2,
+                },
+            });
+            const controlDiv = document.createElement('div');
+            const controlUI  = document.createElement('div');
+            controlUI.classList.add('custom-map-control-button');
+            controlUI.title     = 'Click to draw a line';
+            controlUI.innerHTML = 'Draw Line';
+            controlUI.addEventListener('click', () => {
+                drawingModeEnabled = !drawingModeEnabled;
+                controlUI.innerHTML = drawingModeEnabled ? 'Exit Draw Mode' : 'Draw Line';
+            });
+            controlDiv.appendChild(controlUI);
+            controlDiv.index = 1;
+            map.controls[google.maps.ControlPosition.TOP_CENTER].push(controlDiv);
+            map.addListener("click", function () {        
+            });
+        
+        function handleMarkerClick(marker) {
+            if (!marker1) {
+                marker1 = marker;
+            } else if (!marker2) {
+                marker2 = marker;
+                if (marker1.getPosition().lat != marker2.getPosition().lat  ||   marker1.getPosition().lng != marker2.getPosition().lng){
+                    drawLineBetweenMarkers(marker1, marker2)
+                }
+                
+                marker1 = null;
+                marker2 = null;
+            }
+        }
+
+        function drawLineBetweenMarkers(marker1, marker2) {
+            const path = [marker1.getPosition(), marker2.getPosition()];
+            console.log(path)
+            const line = new google.maps.Polyline({
+                path: path,
+                geodesic: true,
+                strokeColor: '#ff0000',
+                strokeOpacity: 1.0,
+                strokeWeight: 2,
+                map: map,
+            });
+            lines.push(line); 
+            console.log(line);
+            google.maps.event.addListener(line, 'click', function() {
+                plot_elevation_data(marker1,marker2);
+            });
+        }
+
+        function plot_elevation_data(marker1, marker2){
+            const start_index = marker_index.get(`${marker1.getPosition().lat()},${marker1.getPosition().lng()}`);
+            const end_index   = marker_index.get(`${marker2.getPosition().lat()},${marker2.getPosition().lng()}`);
+            console.log("start_index", start_index,"end_index", end_index);
+            const dist  =  distances[start_index][end_index];
+            const elevationData = path_elevations[start_index][end_index];
+            const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / samples) * k ));
+            const initial_height = positions[start_index][2];
+            const last_height    = positions[end_index][2];     
+            const pathData = Array.from({ length: elevationData.length }, (_, k) => (((last_height - initial_height)/ (samples-1) ) * k + initial_height - labels[k] ));     
+            showLineInfo(`ditance :${dist} km`, elevationData,pathData,labels);
+        }
+
+        function readXMLFile(file) {
+            var reader = new FileReader();
+            reader.onload = function(e) {
+                xmlContent = e.target.result;
+                parseXML(xmlContent);
+            };
+            reader.readAsText(file);
+        }
+        
+        async function getElevation(loc) {
+            console.log(loc);
+            try {
+                const { results } = await elevator.getElevationForLocations({
+                    locations: [loc],
+                });
+        
+                if (results[0]) {
+                    const elevation = results[0].elevation;
+                    const elevationData = elevation + 5; // Adjusted elevation
+                    console.log("elevation", elevationData);
+                    return elevationData;
+                } else {
+                    console.log("Can't get the elevation for this point");
+                    return 0; // Return 0 if no elevation is found
+                }
+            } catch (error) {
+                console.error('Elevation request failed', error);
+                return 0; // Return 0 in case of an error
+            }
+        }
+        
+        async function getElevation_path(loc1, loc2) {
+            let path = [loc1, loc2];
+            try {
+                return await new Promise((resolve, reject) => {
+                    elevator.getElevationAlongPath({
+                        path: path,
+                        samples: samples,
+                    }, function(elevations, status) {
+                        if (status === 'OK' && elevations.length > 0) {
+                            const elevationData = elevations.map(k => k.elevation);
+                            resolve(elevationData);
+                        } else {
+                            resolve(new Array(samples).fill(0));  // Return array with 0 * samples
+                        }
+                    });
+                });
+            } catch (error) {
+                return new Array(samples).fill(0);  // Return array with 0 * samples on error
+            }
+        }
+        
+        async function parseXML(xmlContent) {
+            const parser = new DOMParser();
+            xmlDoc = parser.parseFromString(xmlContent, "text/xml");
+            console.log(xmlDoc);
+            
+            const folderColors = {
+                'TOTEM_SA': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                'SITEs': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+                'SITE_OK': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
+                'RDA': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
+                'Internet Source': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
+            };
+            layers = {}; // Reset layers
+            layers_positions_map = {}; // Reset layers_positions_map
+            layers_positions = {}; // Reset layers_positions
+            markers_name_per_layer = {};
+            markers = []; // Reset markers array
+        
+            // Find all Folder elements
+            const folders = xmlDoc.getElementsByTagName('Folder');
+            console.log(`Found ${folders.length} folders`);
+        
+            // Process folders asynchronously
+            for (const folder of folders) {
+                const folderName = folder.getElementsByTagName('name')[0].textContent;
+                const folderColor = folderColors[folderName];
+        
+                if (!layers[folderName]) {
+                    layers[folderName] = [];
+                    addLayerControls(folderName);
+                    populateLayerOptions(folderName); // Populate select options
+                }
+        
+                const placemarks = folder.getElementsByTagName('Placemark');
+                
+                // Process placemarks asynchronously
+                for (const placemark of placemarks) {
+                    const name = placemark.getElementsByTagName('name')[0].textContent;
+                    const coordinates = placemark.getElementsByTagName('coordinates')[0].textContent.trim().split(',');
+                    const latitude = parseFloat(coordinates[1]);
+                    const longitude = parseFloat(coordinates[0]);
+                    const maxHeightElement = placemark.querySelector('SimpleData[name="Maximum Height (m)"]');
+                    var antenna_height = maxHeightElement ? parseFloat(maxHeightElement.textContent) : 5;
+                    var elevation = await getElevation({ lat: latitude, lng: longitude });
+                    elevation += antenna_height;
+                    if (!layers_positions_map[folderName]) {
+                        layers_positions_map[folderName] = [];
+                    }
+                    if (!markers_name_per_layer[folderName]) {
+                        markers_name_per_layer[folderName] = [];
+                    }
+                    if (!layers_positions[folderName]) {
+                        layers_positions[folderName] = [];
+                    }
+        
+                    layers_positions_map[folderName].push({ lat: latitude, lng: longitude });
+                    layers_positions[folderName].push([latitude, longitude, elevation]);
+                    markers_name_per_layer[folderName].push(name);
+        
+                    const marker = new google.maps.Marker({
+                        position: { lat: latitude, lng: longitude },
+                        map: null, // Map will be added later
+                        title: name,
+                        icon: {
+                            url: folderColor,
+                            scaledSize: new google.maps.Size(40, 40)
+                        }
+                    });
+                    layers[folderName].push(marker);
+                    marker.addListener('click', function() {
+                        if (drawingModeEnabled) {
+                            handleMarkerClick(marker);
+                        } 
+                    });
+        
+                    markers.push(marker);
+                }
+            }
+        }
+
+        function haversine_distance(mk1, mk2) {
+            var R = 6371.0710; // Radius of the Earth in meter
+            var rlat1 = mk1.lat * (Math.PI/180); // Convert degrees to radians
+            var rlat2 = mk2.lat * (Math.PI/180); // Convert degrees to radians
+            var difflat = rlat2-rlat1; // Radian difference (latitudes)
+            var difflon = (mk2.lng-mk1.lng) * (Math.PI/180); // Radian difference (longitudes)
+      
+            var d = 2 * R * Math.asin(Math.sqrt(Math.sin(difflat/2)*Math.sin(difflat/2)+Math.cos(rlat1)*Math.cos(rlat2)*Math.sin(difflon/2)*Math.sin(difflon/2)));
+            return d;
+        }
+        
+        async function fill_matrices() {
+            let sz = markers.length;
+            distances = Array.from(Array(sz), () => Array(sz).fill(0));
+            path_elevations = Array.from(Array(sz), () => Array(sz).fill(null).map(() => []));
+            for (let i = 0; i < sz; i++) {
+                console.log("index", i);
+                distances[i][i] = 0;
+                for (let j = i + 1; j < sz; j++) {
+                    let dst = haversine_distance(positions_map[i], positions_map[j]);
+                    distances[i][j] = dst;
+                    distances[j][i] = dst;
+                    let elev_path = [];
+                    elev_path = await getElevation_path(positions_map[i], positions_map[j]);
+                    path_elevations[i][j] = elev_path;
+                    path_elevations[j][i] = [...elev_path].reverse();
+                }
+            }
+        }
+        
+        function fill_connections() {
+            let sz = markers.length;
+            let possible_conns = Array.from({ length: sz }, () => []);
+            for (let i = 0; i < sz - 1; i++) {
+                console.log("node_index",i);
+                for (let j of final_connections[i]) {
+                    if (distances[i][j] <= dist_thresh) {
+                        
+                            if (!possible_conns[i].includes(j)) {
+                                possible_conns[i].push(j);
+                            }
+                            if (!possible_conns[j].includes(i)) {
+                                possible_conns[j].push(i);
+                            }
+                    }
+                }
+            }
+            console.log("final_connections", possible_conns)
+            return possible_conns;
+        }
+            
+        function addLayerControls(folderName) {
+            // Create a container for each control and label
+            var controlContainer = document.createElement('div');
+            var control = document.createElement('input');
+            control.type = 'checkbox';
+            control.id = folderName;
+            control.checked = false; // Default to unchecked
+            
+            control.addEventListener('change', function() {
+                updateLayerVisibility(folderName, this.checked);
+            });
+            var label = document.createElement('label');
+            label.htmlFor = folderName;
+            label.appendChild(document.createTextNode(folderName));
+            // Append the control and label to the container
+            controlContainer.appendChild(control);
+            controlContainer.appendChild(label);
+            // Append the container to the main layer controls container
+            var container = document.getElementById('layer-controls'); // Assuming you have a container for controls
+            container.appendChild(controlContainer);
+            // Store the control reference
+            layerControls[folderName] = control;
+        }
+        
+        function updateLayerVisibility(folderName, isVisible) {
+            if (layers[folderName]) {
+                layers[folderName].forEach(function(marker) {
+                    marker.setMap(isVisible ? map : null); // Show or hide the marker based on layer visibility
+                });
+            }
+        }
+
+        function populateLayerOptions(folderName) {
+            // Populate Source Layers
+            var sourceLayerSelect = document.getElementById('sourceLayers');
+            var option = document.createElement('option');
+            option.value = folderName;
+            option.textContent = folderName;
+            sourceLayerSelect.appendChild(option);
+        
+            // Populate Destination Layers
+            var destLayerSelect = document.getElementById('destLayers');
+            var option2 = document.createElement('option');
+            option2.value = folderName;
+            option2.textContent = folderName;
+            destLayerSelect.appendChild(option2);
+        }
+        
+        function updateLayerVisibility(folderName, isVisible) {
+            if (layers[folderName]) {
+                layers[folderName].forEach(function(marker) {
+                    marker.setMap(isVisible ? map : null);
+                });
+            }
+        }
+        
+        function isLayerVisible(folderName) {
+            return layerControls[folderName] && layerControls[folderName].checked;
+        }
+        const slider = document.getElementById("distanceSlider");
+        const output = document.getElementById("distanceValue");
+
+        // Update the initial value
+        output.textContent = slider.value;
+        dist_thresh = output;
+
+        // Update the value dynamically as the slider is moved
+        slider.oninput = function() {
+            output.textContent = this.value;
+            dist_thresh = this.value;
+
+        };
+
+        document.getElementById('upload_file').addEventListener('click', function () {
+            var fileInput = document.getElementById('file');
+            var file = fileInput.files[0];
+            if (!file) {
+                alert('Please upload an XML file.');
+                return;
+            }
+            if (file.name.endsWith('.kml')) {
+                readXMLFile(file);
+                document.querySelector('.upload_kml_file').style.display = 'none';
+            } else {
+                alert('Unsupported file type. Please upload an XML file.');
+            }
+        });
+
+        document.getElementById('processLayers').addEventListener('click', async function () {
+    
+            // Retrieve the selected options from source and destination layers
+            var selectedSourceLayers = Array.from(document.getElementById('sourceLayers').selectedOptions).map(option => option.value);
+            var selectedDestLayers = Array.from(document.getElementById('destLayers').selectedOptions).map(option => option.value);
+            const spinner = document.getElementById("loading-spinner");
+            spinner.style.display = "block";
+
+            var source_markers = [];
+            var dest_markers = [];
+            var source_labels = [];
+            var dest_labels = [];
+        
+            // Populate source_markers and source_labels based on the selected source layers
+            for (let i = 0; i < selectedSourceLayers.length; i++) {
+                source_markers = source_markers.concat(layers[selectedSourceLayers[i]]);
+                source_labels = source_labels.concat(Array(layers[selectedSourceLayers[i]].length).fill(selectedSourceLayers[i]));
+            }
+        
+            // Populate dest_markers and dest_labels based on the selected destination layers
+            for (let j = 0; j < selectedDestLayers.length; j++) {
+                dest_markers = dest_markers.concat(layers[selectedDestLayers[j]]);
+                dest_labels = dest_labels.concat(Array(layers[selectedDestLayers[j]].length).fill(selectedDestLayers[j]));
+            }
+        
+            // Combine all labels into a single array
+            total_labels = [...source_labels, ...dest_labels];
+            // Create a map that holds arrays of positions for each label
+            
+            for (let i = 0; i < total_labels.length; ++i) {
+                if (layers_positions[total_labels[i]] !== undefined && layers_positions[total_labels[i]].length !== 0) {
+                    positions = positions.concat(layers_positions[total_labels[i]]);
+                }
+                delete layers_positions[total_labels[i]]; // Prevent duplication in subsequent iterations
+                
+                if (layers_positions_map[total_labels[i]] !== undefined && layers_positions_map[total_labels[i]].length !== 0) {
+                    positions_map = positions_map.concat(layers_positions_map[total_labels[i]]);
+                }
+                delete layers_positions_map[total_labels[i]]; // Prevent duplication in subsequent iterations
+                if (markers_name_per_layer[total_labels[i]] !== undefined && markers_name_per_layer[total_labels[i]].length !== 0) {
+                    marker_names = marker_names.concat(markers_name_per_layer[total_labels[i]]);
+                }
+                delete markers_name_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
+            }
+            
+            console.log(positions);
+            console.log(positions_map);
+            console.log(marker_names);
+            for (let i = 0 ; i < positions.length; ++i){
+                const l1 = positions_map[i].lat;
+                const l2 = positions_map[i].lng;
+                const key = `${l1},${l2}`;
+                marker_index.set(key, i);
+            }
+            
+            // Fill matrices and process connections
+            await fill_matrices();
+            console.log("Matrices filled, proceeding to compute possible links");
+            spinner.style.display = "none";
+
+        
+            // Combine all markers into a single array and calculate possible links
+            total_markers = [...source_markers, ...dest_markers];
+            sz_src = source_markers.length;
+            node_capacities = [];
+            for (let i = 0; i < total_labels.length; ++i) {
+                if (total_labels[i] === 'Internet Source') {
+                    node_capacities.push(2000);
+                } else if (total_labels[i] === 'RDA') {
+                    node_capacities.push(1);
+                } else if (total_labels[i] === 'SITEs') {
+                    node_capacities.push(1);
+                } else {
+                    node_capacities.push(0);
+                }
+            }
+            console.log(node_capacities);
+            console.log("computing possible_connections")
+            final_connections = await possible_links(total_markers, sz_src);
+        
+            // Logging the selections and total connections
+            console.log('Selected Source Layers:', selectedSourceLayers);
+            console.log('Selected Destination Layers:', selectedDestLayers);
+            console.log('Total Connections:', final_connections);
+        
+            // Implement further processing logic here
+        });
+
+        /*
+        document.getElementById("submit_global_thresh").addEventListener('click', function(){
+            global_thresh =  this.value;
+            console.log(global_thresh);
+        });
+*/
+        document.getElementById("submit_thresh").addEventListener('click', function(){
+            connections = fill_connections();
+        });
+
+        function possible_links(total_markers, sz_src) {
+            let sz1 = total_markers.length;
+            let total_connections = Array.from({ length: sz1 }, () => []); // Initialize with empty arrays
+            for (let i = 0; i < sz1; ++i) {
+                    if (total_labels[i] === 'SITEs'  || total_labels[i] === 'RDA'){
+                        obligatory_nodes.push(i);
+                    }
+                for (let j = Math.max(i + 1, sz_src); j < sz1; ++j) {
+                    // Find the start and end positions in the positions_map
+                    let pathClear = true;
+                    let dst = distances[i][j];
+                    if (dst <= global_thresh) {
+                        const path_elevation = path_elevations[i][j];
+                        const elevationStart = path_elevation[0] + 5;
+                        const elevationEnd = path_elevation[path_elevation.length - 1] + 5;
+                        const labels = Array.from({ length: path_elevation.length }, (_, k) => (dst / samples) * k );
+                        for (let k = 1; k < path_elevation.length - 1; k++) {
+                            let elevation = path_elevation[k];
+                            let interpolatedElevation  = elevationStart + ((elevationEnd - elevationStart) * (k / (samples -1) ));
+                            // TO ACTIVATE THE FRESNEL ZONE VERIFICATION
+                            interpolatedElevation  -= labels[k]
+                            if (elevation >= interpolatedElevation) {
+                                pathClear = false;
+                                break;
+                            }
+                        }
+                        if (pathClear) {
+                            total_connections[i].push(j);
+                            total_connections[j].push(i);
+                        }
+                    } 
+                }
+            }
+        
+            return total_connections;
+        }
+        
+        function isLayerVisible(folderName) {
+            return layerControls[folderName] && layerControls[folderName].checked;
+        }
+        
+        
+        
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+        function symmetricPoint(center, point) {
+            return {
+                lat: 2 * center.lat - point.lat,
+                lng: 2 * center.lng - point.lng
+            };
+        }
+
+
+        document.getElementById('generate-topology').addEventListener('click', handleGenerateTopology);
+        async function handleGenerateTopology(event) {
+             // Clear all lines from the map
+             for (let line of lines) {
+                line.setMap(null);
+            }
+            lines = [];
+        
+            // Clear all triangles from the map
+            for (let triangle of triangles) {
+                triangle.setMap(null);
+            }
+            triangles = []
+            roles = [];
+            horizontal_azimuths= [];
+            vertical_azimuths = []
+            channel_links  =[];
+            available_channels.forEach(channel => {
+                channel_colors[channel] = getRandomColor();
+            });
+            const formData = {
+                "n": sz_src,
+                "positions": positions,
+                "labels": total_labels,
+                "distances": distances,
+                "obligatory_nodes": obligatory_nodes,
+                "possible_connections": connections, 
+                "node_capacities": node_capacities,
+                "bandwidth": bandwidth ,
+                "available_channels": available_channels
+            };
+            console.log(formData);
+            await fetch('http://localhost:5000/generate_topology', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+            })
+            .then(response => {
+                if (!response.ok) {
+                        throw new Error(`Server returned status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then( async response => {
+                
+                if (response.state ){
+                    roles= []
+                    horizontal_azimuths = [];
+                    vertical_azimuths = [];
+                    channel_link = [];
+                    router_type = [];
+                    generateTopologyClicked = true;
+                    const topology = response.node_tree;
+                    const connections = response.node_list;
+                    const rates = response.data_list;
+                    const capacities = response.capacities;
+                    const consumed_rates = response.consumed_rates;
+                    const channel_array = response.channel_array;
+                    const connection_boundaries = response.connection_boundaries;
+                    const horizontal_azimuth = response.horizontal_azimuth;
+                    const vertical_azimuth = response.vertical_azimuth;
+                    for (let i = 0; i < total_markers.length; i++) {
+                        let rl = '';
+                        let horizontal_az = 0;
+                        let vertical_az = 0;
+                        let ch = '';
+                        let rt_type;
+                        if (topology[i].length > 0) {
+                            rl = 'Ap' + rl;
+                            console.log(rl)
+                            horizontal_az = Math.ceil(horizontal_azimuth[i]);
+                            console.log(horizontal_az);
+                            vertical_az = Math.ceil(vertical_azimuth[i]);
+                            console.log(vertical_az);
+                            ch += channel_array[i][1].toString();
+                            ch += " ";
+                            rt_type = "StartMesh HD";
+                            if (topology[i].length > 1){
+                                rt_type = "Sector M90";
+                                if (horizontal_az >= 90) {
+                                    rt_type = "Sector D120";
+                                }
+                                const end1 = symmetricPoint(positions_map[connection_boundaries[i][0]], positions_map[i]);
+                                const end2 = symmetricPoint(positions_map[connection_boundaries[i][1]], positions_map[i]);
+                                const triangleCoords = [
+                                    positions_map[i], 
+                                    end1, 
+                                    end2
+                                ];
+                                const color = channel_colors[channel_array[i][1]];
+                                const triangle = new google.maps.Polygon({
+                                    paths: triangleCoords,
+                                    strokeColor: color,
+                                    strokeOpacity: 0.8,
+                                    strokeWeight: 2,
+                                    fillColor: color,
+                                    fillOpacity: 0.35,
+                                    clickable: false    
+                                });
+                                triangle.setMap(map);
+                                triangles.push(triangle);
+                            }
+                        }
+                        if (i>= sz_src && connections[i]!== -1) {
+                            rt_type = "StartMesh HD";
+                            rl += ' Client';
+                            ch += channel_array[i][0].toString();
+                            const startCoords = positions_map[i];
+                            const endCoords   = positions_map[connections[i]];
+                            const rate        = Math.ceil(rates[i]);
+                            const consumed_rate = Math.ceil(consumed_rates[i]);
+                            const cap  = Math.ceil(capacities[i][connections[i]]);
+                            const dist = distances[i][connections[i]] ;
+                            const center = positions_map[connections[i]];
+                            const radius = distances[i][connections[i]];
+                            const path = [startCoords, endCoords];
+                            const channel = channel_array[i][0]
+                            let Data = [];
+                            
+                            const line = new google.maps.Polyline({
+                                path: [startCoords, endCoords],
+                                geodesic: true,
+                                strokeColor: '#000000',
+                                strokeOpacity: 1.0,
+                                strokeWeight: 2,
+                                icons: [{
+                                    icon: {
+                                        path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW
+                                    },
+                                    offset: '100%'
+                                }],
+                                map: map
+                            });
+                            
+                            // Adding click event listener to the line
+                            google.maps.event.addListener(line, 'click', function(e) {
+                                const elevationData = path_elevations[i][connections[i]];
+                                const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / samples) * k ));
+                                const initial_height = positions[i][2];
+                                const last_height    = positions[connections[i]][2];  
+                                const pathData = Array.from({ length: elevationData.length }, (_, k) => (((last_height - initial_height)/ (samples -1  )) * k + initial_height ));
+                                const contentString = `
+                                    <div>
+                                        <br><b>Link informations:</b></br>
+                                        <br>Capacity: ${cap} Mbps</br>
+                                        <br>Distance: ${dist} Km</br>
+                                        <br>Current rate: ${rate} Mbps</br>
+                                        <br>Channel: ${channel} </br>
+                                        
+                                    </div>
+                                `;
+                                showLineInfo(contentString, elevationData, pathData,labels);
+                            });
+                            line.setMap(map);
+                            lines.push(line);
+                            
+                        }
+                        if (connections[i]=== -1 && topology[i].length ==0){
+                            rl = '-';
+                            horizontal_az = 0;
+                            vertical_az = 0;
+                            ch = 0;
+                            rt_type = '-';
+                        }
+                        roles.push(rl);
+                        horizontal_azimuths.push(horizontal_az)
+                        vertical_azimuths.push(vertical_az)
+                        channel_links.push(ch);
+                        router_type.push(rt_type);
+
+                    }
+                    document.querySelector('.antenna_characteristics').style.display = 'block';
+                    //document.querySelector('.download_button').style.display = 'block';
+                    
+                }
+                else {  
+                        alert('Cannot create topology with this configuration. Please try another config!');
+                        show_topology_error();
+                }  
+            })
+            .catch(error => {
+                alert('Another error while being unable to create topology with this configuration. Please try another config!');
+                
+            });
+        }
+
+        function show_topology_error() {
+            document.querySelector('.antenna_characteristics').style.display = 'block';
+            for (let i = 0; i < total_sz; i++) {
+                for (let j of connections[i]) {  // Iterating over the elements of connections[i]
+                    const dist = distances[i][j];
+                    const startCoords = positions_map[i];
+                    const endCoords = positions_map[j];  // 'j' directly represents the connected node
+                    const path = [startCoords, endCoords];
+        
+                    const line = new google.maps.Polyline({
+                        path: path,  // Simplified this to use the 'path' variable directly
+                        geodesic: true,
+                        strokeColor: '#000000',
+                        strokeOpacity: 1.0,
+                        strokeWeight: 2,
+                        map: map
+                    });
+        
+                    google.maps.event.addListener(line, 'click', function(e) {
+                        const elevationData = path_elevations[i][j];  // Access elevation data correctly
+                        const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / elevationData.length) * k));
+        
+                        const initial_height = positions[i];
+                        const last_height    = positions[connections[i]];  
+                        const pathData = Array.from({ length: elevationData.length }, (_, k) => 
+                            ((last_height - initial_height) / (elevationData.length - 1)) * k + initial_height
+                        );
+        
+                        const contentString = `
+                            <div>
+                                <br>Distance: ${dist} Km</br>
+                            </div>
+                        `;
+                        showLineInfo(contentString, elevationData, pathData, labels);
+                    });
+                    lines.push(line);
+                }
+            }
+        }
+
+        // Function to show line information and elevation chart
+        function showLineInfo(contentString, elevationData,pathData, labels) {
+            document.getElementById('line-info').style.display = 'flex'; 
+            console.log("showing line information")
+            const lineInfo = document.getElementById('line-information');
+            lineInfo.innerHTML = contentString;
+            plot(elevationData,pathData,labels);
+        }
+
+        // Function to plot elevation data
+        function plot(elevationData,pathData,labels) {
+            const ctx = document.getElementById('elevation-chart').getContext('2d');
+            if (chartInstance){
+                chartInstance.destroy();
+            }
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Elevation',
+                            data: elevationData,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.2)', // Light fill color under the curve
+                            borderWidth: 1,
+                            fill: true, // Fills the area under the curve
+                            tension: 0.4 // Adds some smoothing to the line
+                        },
+                        {
+                            label: 'Path',
+                            data: pathData,
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1,
+                            fill: false // This will just plot a line, no fill
+                        }
+                    ]
+                },
+                options: {
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Distance(km)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Elevation (m)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        document.getElementById('close-line-info').addEventListener('click', function() {
+            document.getElementById('line-info').style.display = 'none';
+        });  
+
+        function addLinesToXML(existingXML, lines) {
+            console.log(xmlDoc);
+            const kmlNS = "http://www.opengis.net/kml/2.2";
+            
+            // Find or create the Document element
+            let documentElement = xmlDoc.getElementsByTagNameNS(kmlNS, "Document")[0];
+
+            // Add new lines
+            lines.forEach(line => {
+                const startCoords = line.getPath().getAt(0);
+                const endCoords = line.getPath().getAt(1);
+
+                // Create Placemark for each line
+                const placemark = xmlDoc.createElementNS(kmlNS, "Placemark");
+                placemark.innerHTML = `
+                    <name>Line with Arrow</name>
+                    <styleUrl>#arrowStyle</styleUrl>
+                    <LineString>
+                        <coordinates>${startCoords.lng()},${startCoords.lat()},0 ${endCoords.lng()},${endCoords.lat()},0</coordinates>
+                    </LineString>
+                `;
+                documentElement.appendChild(placemark);
+            });
+        
+            // Serialize the XML document to string
+            const serializer = new XMLSerializer();
+            const updatedXML = serializer.serializeToString(xmlDoc);
+        
+            return updatedXML;
+        }
+
+        function downloadUpdatedKML(updatedXML) {
+            const blob = new Blob([updatedXML], { type: 'application/vnd.google-earth.kml+xml' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'updated_map.kml';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url); // Clean up after download
+        }
+
+        function updateAndDownloadKML(lines) {
+            // Assume xmlContent is the existing KML XML content
+            const updatedXML = addLinesToXML(xmlContent, lines);
+            downloadUpdatedKML(updatedXML);
+        }
+
+        document.getElementById('download_button').addEventListener('click', function() {
+            updateAndDownloadKML(lines);
+        });
+    }
+
+    document.getElementById('generate-characteristics').addEventListener('click', function() {
+        // Display the modal
+        document.getElementById('myModal').style.display = 'block';
+        document.getElementById('myModal').offsetHeight;
+    
+        // Populate the table with antenna data (replace with your actual data source)
+        var antennaData = [];
+        for (var i = 0; i < total_markers.length; i++) {
+            antennaData.push({
+                "Node Id": i,
+                "Name": marker_names[i],
+                "Router Type": router_type[i],
+                "Roles": roles[i],
+                "Horizontal Azimuth": horizontal_azimuths[i] !== 0 ? horizontal_azimuths[i] : "-",
+                "Vertical Azimuth": vertical_azimuths[i] !== 0 ? vertical_azimuths[i] : "-",
+                "Channel": channel_links[i] !== 0 ? channel_links[i] : "-",
+            });
+        }
+        console.log("Antenna Data:", antennaData); // Debugging: Check if data is populated
+    
+        var tableBody = document.getElementById('antennaTableBody');
+        tableBody.innerHTML = ''; 
+        console.log("Table body cleared"); // Debugging
+    
+        // Populate the table with antenna data
+        antennaData.forEach(function(antenna) {
+            var row = document.createElement('tr');
+    
+            var nodeIdCell = document.createElement('td');
+            nodeIdCell.textContent = antenna['Node Id'];
+            row.appendChild(nodeIdCell);
+
+            var positionsCell = document.createElement('td');
+            positionsCell.textContent = antenna['Name'];
+            row.appendChild(positionsCell);
+
+            var typeCell = document.createElement('td');
+            typeCell.textContent = antenna['Router Type'];
+            row.appendChild(typeCell);
+    
+            var roleCell = document.createElement('td');
+            roleCell.textContent = antenna['Roles'];
+            row.appendChild(roleCell);
+    
+            var horizontalAzCell = document.createElement('td');
+            horizontalAzCell.textContent = antenna['Horizontal Azimuth'];
+            row.appendChild(horizontalAzCell);
+    
+            var verticalAzCell = document.createElement('td');
+            verticalAzCell.textContent = antenna['Vertical Azimuth'];
+            row.appendChild(verticalAzCell);
+    
+            var channelCell = document.createElement('td');
+            channelCell.textContent = antenna['Channel'];
+            row.appendChild(channelCell);
+    
+            tableBody.appendChild(row);
+            console.log("Appended row:", row); // Debugging
+        });
+    
+        // Toggle the visibility of the table (optional)
+        var table = document.getElementById('antennaTable');
+        table.style.display = 'table';
+        
+    });
+
+    // Close the modal when the user clicks on <span> (x)
+    document.querySelector('.close').addEventListener('click', function() {
+        document.getElementById('myModal').style.display = 'none';
+    });
+    
+    // Close the modal if the user clicks outside of it
+    window.addEventListener('click', function(event) {
+        if (event.target === document.getElementById('myModal')) {
+            document.getElementById('myModal').style.display = 'none';
+        }
+    });
+    
+</script>
+</body>
+</html>
+
+
