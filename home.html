@@ -17,20 +17,31 @@
         <aside id="left-sidebar">
             <div class="sidebar-content">
                 <img src="media/luceor_logo.png" alt="Luceor Logo">
+
                 <h2>Create Your Network Topology</h2>
-                <div class="upload_kml_file" >
+                <div class = "first-options">
+                    <button id="new_project">New project</button>
+                    <button id="old_project">Import existing project</button>
+                </div>
+
+                <div class="upload_kml_file" style="display: none;" >
                     <form enctype="multipart/form-data">
                         <input id="file" name="file" type="file" />
                         <button  type="button" id="upload_file">Upload KML file</button>
                     </form>
                 </div>
+                
+                <div class="upload_json_file" style="display: none;" >
+                    <input type="file" id="importFromFile" accept=".json" />
+                    <button id="importButton" >Upload Json File</button>
+                </div>
+
                 <div id="layer-controls"></div>
-                <div id="layer-control" >
+                <div id="layer-control" style="display: none;">
                     <h2>Select Source and Destination Layers</h2>
                     <div class="source-layers">
                         <label for="sourceLayers">Source Layers:</label>
                         <select id="sourceLayers" name="sourceLayers" multiple required>
-                            
                         </select>
                     </div>
                     <div class="dest-layers">
@@ -40,25 +51,23 @@
                     </div>
                     <button type="button" id="processLayers">Process Layers</button>
                 </div>
-                <div class="max_dist_threshold" >
+                <div class="max_dist_threshold" style="display: none;">
                     <label for="distanceSlider">Select Distance (km):</label>
                     <input type="range" id="distanceSlider" min="1" max="100" value="50" step="1">
                     <span id="distanceValue">50 km</span>
                     <button type="button" id="submit_thresh">Submit threshold</button>
                 </div>
-
-                <div class="topology-container" >
+                <div class="other_buttons" style="display: none;">
+                    <button id="saveToLocalStorage" >Save to Local Storage</button>
+                    <button id="exportToFile" >Export to File</button>
+                </div>
+                <div class="topology-container" style="display: none;" >
                     <button type="button" id="generate-topology">Generate Topology</button>
                 </div>
-
-                
-                
                 <div class="antenna_characteristics" style="display: none;">
                     <button type="button" id="generate-characteristics">Topology characteristics</button>
                 </div>
-
-
-                <div class="download_button" >
+                <div class="download_button"  style="display: none;">
                     <button type="button" id="download_button">Download Topology</button>
                 </div>
             </div>
@@ -117,7 +126,7 @@
     let drawingModeEnabled = false;
     let channel_colors = {};
     let bandwidth = 20*1e6;
-    let available_channels = [52,  60,  100];
+    let available_channels = [52, 100];
     let roles = [];
     let horizontal_azimuths =[];
     let vertical_azimuths=[];
@@ -145,40 +154,14 @@
     let layerControls    = {};
     let xmlContent       = '';
     let xmlDoc ;
-    let global_max_threshold = 8;
+    let global_max_threshold = 10;
+    let globalVariable;
+    let new_project = true;
+    const position = { lat: 24.6986413, lng: 44.0534141 };
 
 
     async function initMap() {
-            const position = { lat: 29.062921862351214, lng: 40.61478545935556 };
-            let map = new google.maps.Map(document.getElementById("map-container"), {
-                zoom: 6,
-                center: position,
-                mapTypeId: "roadmap", 
-            });
-            elevator = new google.maps.ElevationService();
-            drawingManager = new google.maps.drawing.DrawingManager({
-                drawingMode: google.maps.drawing.OverlayType.POLYLINE,
-                drawingControl: false,
-                polylineOptions: {
-                strokeColor: '#ff0000',
-                strokeWeight: 2,
-                },
-            });
-            const controlDiv = document.createElement('div');
-            const controlUI  = document.createElement('div');
-            controlUI.classList.add('custom-map-control-button');
-            controlUI.title     = 'Click to draw a line';
-            controlUI.innerHTML = 'Draw Line';
-            controlUI.addEventListener('click', () => {
-                drawingModeEnabled = !drawingModeEnabled;
-                controlUI.innerHTML = drawingModeEnabled ? 'Exit Draw Mode' : 'Draw Line';
-            });
-            controlDiv.appendChild(controlUI);
-            controlDiv.index = 1;
-            map.controls[google.maps.ControlPosition.TOP_CENTER].push(controlDiv);
-            map.addListener("click", function () {        
-            });
-        
+
         function handleMarkerClick(marker) {
             if (!marker1) {
                 marker1 = marker;
@@ -187,7 +170,6 @@
                 if (marker1.getPosition().lat != marker2.getPosition().lat  ||   marker1.getPosition().lng != marker2.getPosition().lng){
                     drawLineBetweenMarkers(marker1, marker2)
                 }
-                
                 marker1 = null;
                 marker2 = null;
             }
@@ -195,7 +177,6 @@
 
         function drawLineBetweenMarkers(marker1, marker2) {
             const path = [marker1.getPosition(), marker2.getPosition()];
-            console.log(path)
             const line = new google.maps.Polyline({
                 path: path,
                 geodesic: true,
@@ -205,23 +186,24 @@
                 map: map,
             });
             lines.push(line); 
-            console.log(line);
             google.maps.event.addListener(line, 'click', function() {
                 plot_elevation_data(marker1,marker2);
             });
         }
 
         function plot_elevation_data(marker1, marker2){
+            console.log(marker_index);
             const start_index = marker_index.get(`${marker1.getPosition().lat()},${marker1.getPosition().lng()}`);
             const end_index   = marker_index.get(`${marker2.getPosition().lat()},${marker2.getPosition().lng()}`);
             console.log("start_index", start_index,"end_index", end_index);
             const dist  =  distances[start_index][end_index];
             const elevationData = path_elevations[start_index][end_index];
-            const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / samples) * k ));
+            const labels = Array.from({ length:samples}, (_, k) => Math.floor((dist / (samples-1) * k )));
             const initial_height = positions[start_index][2];
             const last_height    = positions[end_index][2];     
-            const pathData = Array.from({ length: elevationData.length }, (_, k) => (((last_height - initial_height)/ (samples-1) ) * k + initial_height - labels[k] ));     
-            showLineInfo(`ditance :${dist} km`, elevationData,pathData,labels);
+            const pathData = Array.from({ length:samples}, (_, k) => (((last_height - initial_height)/ (samples-1) ) * k + initial_height ));     
+            const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples-1) * k ) * (dist -(dist / (samples-1) * k )) * 0.06/ dist))))); 
+            showLineInfo(`distance :${dist} km`, elevationData,fresnelData,pathData,labels);
         }
 
         function readXMLFile(file) {
@@ -232,49 +214,7 @@
             };
             reader.readAsText(file);
         }
-        
-        async function getElevation(loc) {
-            console.log(loc);
-            try {
-                const { results } = await elevator.getElevationForLocations({
-                    locations: [loc],
-                });
-        
-                if (results[0]) {
-                    const elevation = results[0].elevation;
-                    const elevationData = elevation + 5; // Adjusted elevation
-                    console.log("elevation", elevationData);
-                    return elevationData;
-                } else {
-                    console.log("Can't get the elevation for this point");
-                    return 0; // Return 0 if no elevation is found
-                }
-            } catch (error) {
-                console.error('Elevation request failed', error);
-                return 0; // Return 0 in case of an error
-            }
-        }
-        
-        async function getElevation_path(loc1, loc2) {
-            let path = [loc1, loc2];
-            try {
-                return await new Promise((resolve, reject) => {
-                    elevator.getElevationAlongPath({
-                        path: path,
-                        samples: samples,
-                    }, function(elevations, status) {
-                        if (status === 'OK' && elevations.length > 0) {
-                            const elevationData = elevations.map(k => k.elevation);
-                            resolve(elevationData);
-                        } else {
-                            resolve(new Array(samples).fill(0));  // Return array with 0 * samples
-                        }
-                    });
-                });
-            } catch (error) {
-                return new Array(samples).fill(0);  // Return array with 0 * samples on error
-            }
-        }
+
         
         async function parseXML(xmlContent) {
             const parser = new DOMParser();
@@ -284,7 +224,6 @@
             const folderColors = {
                 'TOTEM_SA': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
                 'SITEs': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
-                'SITE_OK': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
                 'RDA': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
                 'Internet Source': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
             };
@@ -302,15 +241,12 @@
             for (const folder of folders) {
                 const folderName = folder.getElementsByTagName('name')[0].textContent;
                 const folderColor = folderColors[folderName];
-        
                 if (!layers[folderName]) {
                     layers[folderName] = [];
                     addLayerControls(folderName);
                     populateLayerOptions(folderName); // Populate select options
                 }
-        
                 const placemarks = folder.getElementsByTagName('Placemark');
-                
                 // Process placemarks asynchronously
                 for (const placemark of placemarks) {
                     const name = placemark.getElementsByTagName('name')[0].textContent;
@@ -319,22 +255,22 @@
                     const longitude = parseFloat(coordinates[0]);
                     const maxHeightElement = placemark.querySelector('SimpleData[name="Maximum Height (m)"]');
                     var antenna_height = maxHeightElement ? parseFloat(maxHeightElement.textContent) : 5;
-                    var elevation = await getElevation({ lat: latitude, lng: longitude });
-                    elevation += antenna_height;
-                    if (!layers_positions_map[folderName]) {
-                        layers_positions_map[folderName] = [];
+                    if (new_project){
+                        var elevation = await getElevation({ lat: latitude, lng: longitude });
+                        elevation += antenna_height;
+                        if (!layers_positions_map[folderName]) {
+                            layers_positions_map[folderName] = [];
+                        }
+                        if (!markers_name_per_layer[folderName]) {
+                            markers_name_per_layer[folderName] = [];
+                        }
+                        if (!layers_positions[folderName]) {
+                            layers_positions[folderName] = [];
+                        }
+                        layers_positions_map[folderName].push({ lat: latitude, lng: longitude });
+                        layers_positions[folderName].push([latitude, longitude, elevation]);
+                        markers_name_per_layer[folderName].push(name);
                     }
-                    if (!markers_name_per_layer[folderName]) {
-                        markers_name_per_layer[folderName] = [];
-                    }
-                    if (!layers_positions[folderName]) {
-                        layers_positions[folderName] = [];
-                    }
-        
-                    layers_positions_map[folderName].push({ lat: latitude, lng: longitude });
-                    layers_positions[folderName].push([latitude, longitude, elevation]);
-                    markers_name_per_layer[folderName].push(name);
-        
                     const marker = new google.maps.Marker({
                         position: { lat: latitude, lng: longitude },
                         map: null, // Map will be added later
@@ -350,71 +286,17 @@
                             handleMarkerClick(marker);
                         } 
                     });
-        
                     markers.push(marker);
                 }
             }
         }
 
-        function haversine_distance(mk1, mk2) {
-            var R = 6371.0710; // Radius of the Earth in meter
-            var rlat1 = mk1.lat * (Math.PI/180); // Convert degrees to radians
-            var rlat2 = mk2.lat * (Math.PI/180); // Convert degrees to radians
-            var difflat = rlat2-rlat1; // Radian difference (latitudes)
-            var difflon = (mk2.lng-mk1.lng) * (Math.PI/180); // Radian difference (longitudes)
-      
-            var d = 2 * R * Math.asin(Math.sqrt(Math.sin(difflat/2)*Math.sin(difflat/2)+Math.cos(rlat1)*Math.cos(rlat2)*Math.sin(difflon/2)*Math.sin(difflon/2)));
-            return d;
-        }
-        
-        async function fill_matrices() {
-            let sz = markers.length;
-            distances = Array.from(Array(sz), () => Array(sz).fill(0));
-            path_elevations = Array.from(Array(sz), () => Array(sz).fill(null).map(() => []));
-            for (let i = 0; i < sz; i++) {
-                console.log("index", i);
-                distances[i][i] = 0;
-                for (let j = i + 1; j < sz; j++) {
-                    let dst = haversine_distance(positions_map[i], positions_map[j]);
-                    distances[i][j] = dst;
-                    distances[j][i] = dst;
-                    let elev_path = [];
-                    elev_path = await getElevation_path(positions_map[i], positions_map[j]);
-                    path_elevations[i][j] = elev_path;
-                    path_elevations[j][i] = [...elev_path].reverse();
-                }
-            }
-        }
-        
-        function fill_connections() {
-            let sz = markers.length;
-            let possible_conns = Array.from({ length: sz }, () => []);
-            for (let i = 0; i < sz - 1; i++) {
-                console.log("node_index",i);
-                for (let j of final_connections[i]) {
-                    if (distances[i][j] <= dist_thresh) {
-                        
-                            if (!possible_conns[i].includes(j)) {
-                                possible_conns[i].push(j);
-                            }
-                            if (!possible_conns[j].includes(i)) {
-                                possible_conns[j].push(i);
-                            }
-                    }
-                }
-            }
-            console.log("final_connections", possible_conns)
-            return possible_conns;
-        }
-            
         function addLayerControls(folderName) {
-            // Create a container for each control and label
             var controlContainer = document.createElement('div');
             var control = document.createElement('input');
             control.type = 'checkbox';
             control.id = folderName;
-            control.checked = false; // Default to unchecked
-            
+            control.checked = false; 
             control.addEventListener('change', function() {
                 updateLayerVisibility(folderName, this.checked);
             });
@@ -427,7 +309,6 @@
             // Append the container to the main layer controls container
             var container = document.getElementById('layer-controls'); // Assuming you have a container for controls
             container.appendChild(controlContainer);
-            // Store the control reference
             layerControls[folderName] = control;
         }
         
@@ -446,7 +327,6 @@
             option.value = folderName;
             option.textContent = folderName;
             sourceLayerSelect.appendChild(option);
-        
             // Populate Destination Layers
             var destLayerSelect = document.getElementById('destLayers');
             var option2 = document.createElement('option');
@@ -455,146 +335,55 @@
             destLayerSelect.appendChild(option2);
         }
         
-        function updateLayerVisibility(folderName, isVisible) {
-            if (layers[folderName]) {
-                layers[folderName].forEach(function(marker) {
-                    marker.setMap(isVisible ? map : null);
-                });
-            }
-        }
-        
         function isLayerVisible(folderName) {
             return layerControls[folderName] && layerControls[folderName].checked;
         }
-        const slider = document.getElementById("distanceSlider");
-        const output = document.getElementById("distanceValue");
 
-        // Update the initial value
-        output.textContent = slider.value;
-        dist_thresh = output;
-
-        // Update the value dynamically as the slider is moved
-        slider.oninput = function() {
-            output.textContent = this.value;
-            dist_thresh = this.value;
-
-        };
-
-        document.getElementById('upload_file').addEventListener('click', function () {
-            var fileInput = document.getElementById('file');
-            var file = fileInput.files[0];
-            if (!file) {
-                alert('Please upload an XML file.');
-                return;
-            }
-            if (file.name.endsWith('.kml')) {
-                readXMLFile(file);
-                document.querySelector('.upload_kml_file').style.display = 'none';
-            } else {
-                alert('Unsupported file type. Please upload an XML file.');
-            }
-        });
-
-        document.getElementById('processLayers').addEventListener('click', async function () {
-    
-            // Retrieve the selected options from source and destination layers
-            var selectedSourceLayers = Array.from(document.getElementById('sourceLayers').selectedOptions).map(option => option.value);
-            var selectedDestLayers = Array.from(document.getElementById('destLayers').selectedOptions).map(option => option.value);
-            const spinner = document.getElementById("loading-spinner");
-            spinner.style.display = "block";
-
-            var source_markers = [];
-            var dest_markers = [];
-            var source_labels = [];
-            var dest_labels = [];
+        async function getElevation(loc) {
+            console.log(loc);
+            try {
+                const { results } = await elevator.getElevationForLocations({
+                    locations: [loc],
+                });
         
-            // Populate source_markers and source_labels based on the selected source layers
-            for (let i = 0; i < selectedSourceLayers.length; i++) {
-                source_markers = source_markers.concat(layers[selectedSourceLayers[i]]);
-                source_labels = source_labels.concat(Array(layers[selectedSourceLayers[i]].length).fill(selectedSourceLayers[i]));
-            }
-        
-            // Populate dest_markers and dest_labels based on the selected destination layers
-            for (let j = 0; j < selectedDestLayers.length; j++) {
-                dest_markers = dest_markers.concat(layers[selectedDestLayers[j]]);
-                dest_labels = dest_labels.concat(Array(layers[selectedDestLayers[j]].length).fill(selectedDestLayers[j]));
-            }
-        
-            // Combine all labels into a single array
-            total_labels = [...source_labels, ...dest_labels];
-            // Create a map that holds arrays of positions for each label
-            
-            for (let i = 0; i < total_labels.length; ++i) {
-                if (layers_positions[total_labels[i]] !== undefined && layers_positions[total_labels[i]].length !== 0) {
-                    positions = positions.concat(layers_positions[total_labels[i]]);
-                }
-                delete layers_positions[total_labels[i]]; // Prevent duplication in subsequent iterations
-                
-                if (layers_positions_map[total_labels[i]] !== undefined && layers_positions_map[total_labels[i]].length !== 0) {
-                    positions_map = positions_map.concat(layers_positions_map[total_labels[i]]);
-                }
-                delete layers_positions_map[total_labels[i]]; // Prevent duplication in subsequent iterations
-                if (markers_name_per_layer[total_labels[i]] !== undefined && markers_name_per_layer[total_labels[i]].length !== 0) {
-                    marker_names = marker_names.concat(markers_name_per_layer[total_labels[i]]);
-                }
-                delete markers_name_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
-            }
-            
-            console.log(positions);
-            console.log(positions_map);
-            console.log(marker_names);
-            for (let i = 0 ; i < positions.length; ++i){
-                const l1 = positions_map[i].lat;
-                const l2 = positions_map[i].lng;
-                const key = `${l1},${l2}`;
-                marker_index.set(key, i);
-            }
-            
-            // Fill matrices and process connections
-            await fill_matrices();
-            console.log("Matrices filled, proceeding to compute possible links");
-            spinner.style.display = "none";
-
-        
-            // Combine all markers into a single array and calculate possible links
-            total_markers = [...source_markers, ...dest_markers];
-            sz_src = source_markers.length;
-            node_capacities = [];
-            for (let i = 0; i < total_labels.length; ++i) {
-                if (total_labels[i] === 'Internet Source') {
-                    node_capacities.push(2000);
-                } else if (total_labels[i] === 'RDA') {
-                    node_capacities.push(1);
-                } else if (total_labels[i] === 'SITEs') {
-                    node_capacities.push(1);
+                if (results[0]) {
+                    const elevation = results[0].elevation;
+                    console.log("elevation", elevation);
+                    return elevation;
                 } else {
-                    node_capacities.push(0);
+                    console.log("Can't get the elevation for this point");
+                    return 0; // Return 0 in case of an error
+                }
+            } catch (error) {
+                console.error('Elevation request failed', error);
+                return 0; // Return 0 in case of an error
+            }
+        }
+        
+        function fill_connections() {
+            let sz = positions.length;    
+            let possible_conns = Array.from({ length: sz }, () => []);
+            console.log(final_connections)
+            for (let i = 0; i < sz - 1; i++) {
+                console.log("node_index",i);
+                for (let j of final_connections[i]) {
+                    if (distances[i][j] <= dist_thresh) {
+                            console.log(j)
+                            if (!possible_conns[i].includes(j)) {
+                                possible_conns[i].push(j);
+                            }
+                            if (!possible_conns[j].includes(i)) {
+                                possible_conns[j].push(i);
+                            }
+                    }
                 }
             }
-            console.log(node_capacities);
-            console.log("computing possible_connections")
-            final_connections = await possible_links(total_markers, sz_src);
-        
-            // Logging the selections and total connections
-            console.log('Selected Source Layers:', selectedSourceLayers);
-            console.log('Selected Destination Layers:', selectedDestLayers);
-            console.log('Total Connections:', final_connections);
-        
-            // Implement further processing logic here
-        });
-
-        /*
-        document.getElementById("submit_global_thresh").addEventListener('click', function(){
-            global_thresh =  this.value;
-            console.log(global_thresh);
-        });
-*/
-        document.getElementById("submit_thresh").addEventListener('click', function(){
-            connections = fill_connections();
-        });
-
-        function possible_links(total_markers, sz_src) {
-            let sz1 = total_markers.length;
+            console.log("final_connections", possible_conns)
+            return possible_conns;
+        }
+    
+        function possible_links(sz_src) {
+            let sz1 = positions.length;
             let total_connections = Array.from({ length: sz1 }, () => []); // Initialize with empty arrays
             for (let i = 0; i < sz1; ++i) {
                     if (total_labels[i] === 'SITEs'  || total_labels[i] === 'RDA'){
@@ -604,16 +393,16 @@
                     // Find the start and end positions in the positions_map
                     let pathClear = true;
                     let dst = distances[i][j];
-                    if (dst <= global_thresh) {
+                    if (dst <= global_max_threshold) {
                         const path_elevation = path_elevations[i][j];
-                        const elevationStart = path_elevation[0] + 5;
-                        const elevationEnd = path_elevation[path_elevation.length - 1] + 5;
-                        const labels = Array.from({ length: path_elevation.length }, (_, k) => (dst / samples) * k );
+                        const elevationStart = positions[i][2];
+                        const elevationEnd = positions[j][2];
+                        const labels = Array.from({ length: path_elevation.length }, (_, k) => (dst / (samples-1) * k ));
                         for (let k = 1; k < path_elevation.length - 1; k++) {
                             let elevation = path_elevation[k];
                             let interpolatedElevation  = elevationStart + ((elevationEnd - elevationStart) * (k / (samples -1) ));
                             // TO ACTIVATE THE FRESNEL ZONE VERIFICATION
-                            interpolatedElevation  -= labels[k]
+                            // interpolatedElevation -=  (17.32 * Math.sqrt(((dst / (samples-1) * k ) * (dst -(dist / (samples-1) * k ) * 0.06/ dst);
                             if (elevation >= interpolatedElevation) {
                                 pathClear = false;
                                 break;
@@ -629,13 +418,44 @@
         
             return total_connections;
         }
+
+        async function fill_matrices() {
+            try {
+                // Define the API endpoint
+                const apiEndpoint = 'http://127.0.0.1:3000/fill-matrices';
+                // Make the POST request to the Flask API
+                const response = await fetch(apiEndpoint, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        positions_map: positions_map,
+                        samples: samples,
+                    }),
+                });
+                // Check if the response is ok (status code 200-299)
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                // Parse the JSON response
+                const data = await response.json();
+                // Extract distances and path elevations from the response
+                distances = data.distances;
+                path_elevations = data.path_elevations;
+                // Handle the API response
+                console.log('Distances:', distances);
+                console.log('Path Elevations:', path_elevations);
+            } catch (error) {
+                // Handle errors
+                console.error('Error calling Flask API:', error);
         
-        function isLayerVisible(folderName) {
-            return layerControls[folderName] && layerControls[folderName].checked;
+                // Optionally, return a default value or rethrow the error
+                return { distances: [], path_elevations: [] };
+            }
         }
         
-        
-        
+
         function getRandomColor() {
             const letters = '0123456789ABCDEF';
             let color = '#';
@@ -644,6 +464,7 @@
             }
             return color;
         }
+
         function symmetricPoint(center, point) {
             return {
                 lat: 2 * center.lat - point.lat,
@@ -651,8 +472,7 @@
             };
         }
 
-
-        document.getElementById('generate-topology').addEventListener('click', handleGenerateTopology);
+        
         async function handleGenerateTopology(event) {
              // Clear all lines from the map
              for (let line of lines) {
@@ -715,7 +535,7 @@
                     const connection_boundaries = response.connection_boundaries;
                     const horizontal_azimuth = response.horizontal_azimuth;
                     const vertical_azimuth = response.vertical_azimuth;
-                    for (let i = 0; i < total_markers.length; i++) {
+                    for (let i = 0; i < positions.length; i++) {
                         let rl = '';
                         let horizontal_az = 0;
                         let vertical_az = 0;
@@ -791,10 +611,11 @@
                             // Adding click event listener to the line
                             google.maps.event.addListener(line, 'click', function(e) {
                                 const elevationData = path_elevations[i][connections[i]];
-                                const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / samples) * k ));
+                                const labels = Array.from({ length:samples}, (_, k) => Math.floor((dist / (samples -1) * k )));
                                 const initial_height = positions[i][2];
                                 const last_height    = positions[connections[i]][2];  
-                                const pathData = Array.from({ length: elevationData.length }, (_, k) => (((last_height - initial_height)/ (samples -1  )) * k + initial_height ));
+                                const pathData = Array.from({ length:samples}, (_, k) => (((last_height - initial_height)/ (samples -1  )) * k + initial_height ));
+                                const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples-1) * k ) * (dist -(dist / (samples-1) * k )) * 0.06/ dist))))); 
                                 const contentString = `
                                     <div>
                                         <br><b>Link informations:</b></br>
@@ -805,7 +626,7 @@
                                         
                                     </div>
                                 `;
-                                showLineInfo(contentString, elevationData, pathData,labels);
+                                showLineInfo(contentString, elevationData,fresnelData, pathData,labels);
                             });
                             line.setMap(map);
                             lines.push(line);
@@ -860,20 +681,20 @@
         
                     google.maps.event.addListener(line, 'click', function(e) {
                         const elevationData = path_elevations[i][j];  // Access elevation data correctly
-                        const labels = Array.from({ length: elevationData.length }, (_, k) => Math.floor((dist / elevationData.length) * k));
+                        const labels = Array.from({ length: samples }, (_, k) => Math.floor((dist / (samples - 1) * k)));
         
                         const initial_height = positions[i];
                         const last_height    = positions[connections[i]];  
-                        const pathData = Array.from({ length: elevationData.length }, (_, k) => 
-                            ((last_height - initial_height) / (elevationData.length - 1)) * k + initial_height
+                        const pathData = Array.from({ length: samples }, (_, k) => 
+                            ((last_height - initial_height) / (samples - 1)) * k + initial_height
                         );
-        
+                        const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples-1) * k ) * (dist -(dist / (samples-1) * k )) * 0.06/ dist))))); 
                         const contentString = `
                             <div>
                                 <br>Distance: ${dist} Km</br>
                             </div>
                         `;
-                        showLineInfo(contentString, elevationData, pathData, labels);
+                        showLineInfo(contentString, elevationData,fresnelData, pathData, labels);
                     });
                     lines.push(line);
                 }
@@ -881,16 +702,16 @@
         }
 
         // Function to show line information and elevation chart
-        function showLineInfo(contentString, elevationData,pathData, labels) {
+        function showLineInfo(contentString, elevationData,fresnelData,pathData, labels) {
             document.getElementById('line-info').style.display = 'flex'; 
             console.log("showing line information")
             const lineInfo = document.getElementById('line-information');
             lineInfo.innerHTML = contentString;
-            plot(elevationData,pathData,labels);
+            plot(elevationData,fresnelData,pathData,labels);
         }
 
         // Function to plot elevation data
-        function plot(elevationData,pathData,labels) {
+        function plot(elevationData,fresnelData,pathData,labels) {
             const ctx = document.getElementById('elevation-chart').getContext('2d');
             if (chartInstance){
                 chartInstance.destroy();
@@ -908,6 +729,13 @@
                             borderWidth: 1,
                             fill: true, // Fills the area under the curve
                             tension: 0.4 // Adds some smoothing to the line
+                        },
+                        {
+                            label: 'Fresnel Zone',
+                            data: fresnelData,
+                            borderColor:'rgba(255, 255, 0, 1)',
+                            borderWidth: 1,
+                            fill: false // This will just plot a line, no fill
                         },
                         {
                             label: 'Path',
@@ -936,10 +764,6 @@
                 }
             });
         }
-
-        document.getElementById('close-line-info').addEventListener('click', function() {
-            document.getElementById('line-info').style.display = 'none';
-        });  
 
         function addLinesToXML(existingXML, lines) {
             console.log(xmlDoc);
@@ -993,6 +817,385 @@
         document.getElementById('download_button').addEventListener('click', function() {
             updateAndDownloadKML(lines);
         });
+
+        function saveToLocalStorage() {
+            const marker_index_array = Array.from(marker_index.entries());
+            const lines_array = lines.map(line => ({
+                path: line.getPath().getArray().map(latlng => ({ lat: latlng.lat(), lng: latlng.lng() })),  // Extract path as an array of lat/lng objects
+                strokeColor: line.strokeColor,
+                strokeOpacity: line.strokeOpacity,
+                strokeWeight: line.strokeWeight
+            }));
+            globalVariables = {
+                marker_index: marker_index_array,
+                lines:lines_array,
+                path_elevations,
+                final_connections,
+                distances,
+                positions,
+                positions_map,
+                path_elevations,
+                final_connections,
+                distances,
+                total_labels,
+                sz_src,
+                obligatory_nodes,
+                node_capacities,
+                marker_names,
+                horizontal_azimuths,
+                vertical_azimuths,
+                roles,
+                horizontal_azimuths,
+                vertical_azimuths,
+                router_type,
+                channel_links,
+            };
+            localStorage.setItem('globalVariables', JSON.stringify(globalVariables));
+            alert('Variables saved to local storage.');
+        }
+
+        function importFromFile(event) {
+            const appGlobals = {};
+            const file = event.target.files[0];
+            if (!file) return;
+            document.querySelector(".upload_json_file").style.display="None";
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const importedData = JSON.parse(e.target.result);
+                    console.log(importedData);
+                    if (typeof importedData.sz_src === 'number') {
+                        sz_src = importedData.sz_src;
+                        console.log('sz_src:', sz_src);
+                    } else {
+                        throw new Error('Invalid format for sz_src');
+                    }
+                    // Handle other data as needed
+                    for (const [key, value] of Object.entries(importedData)) {
+                        // Check if the key is not one of the predefined ones
+                        if (!['positions', 'sz_src', 'positions_map', 'marker_index', 'distances', 'final_connections', 'lines', 'path_elevations'].includes(key)) {
+                            // Check if value is an array
+                            if (Array.isArray(value)) {
+                                appGlobals[key] = value;  // Assign array variables to the namespace object
+                            } else {
+                                console.warn(`Skipping ${key}: Not an array or invalid type`);
+                            }
+                        }
+                    }
+                    // Log the namespace object to verify contents
+                    console.log(appGlobals);
+                    if (importedData.marker_index) {
+                        if (Array.isArray(importedData.marker_index)) {
+                            // Convert the array of arrays to a Map
+                            marker_index = new Map(importedData.marker_index);
+                            console.log('marker_index:', marker_index); // Check if the map is populated
+                        } else {
+                            throw new Error('Invalid format for marker_index');
+                        }
+                    }
+                    if (importedData.positions) {
+                        if (Array.isArray(importedData.positions) &&
+                            importedData.positions.every(row => Array.isArray(row))) {
+                            positions = importedData.positions;
+                        } else {
+                            throw new Error('Invalid format for positions');
+                        }
+                    }
+
+                    if (importedData.positions_map) {
+                        if (Array.isArray(importedData.positions_map)) {
+                            // Map the data if necessary (though it's already in the expected format)
+                            positions_map = importedData.positions_map.map(item => ({
+                                lat: item.lat,
+                                lng: item.lng
+                            }));
+                        } else {
+                            throw new Error('Invalid format for positions_map');
+                        }
+                    }
+
+                    // Handle distances
+                    if (importedData.distances) {
+                        if (Array.isArray(importedData.distances) &&
+                            importedData.distances.every(row => Array.isArray(row))) {
+                            distances = importedData.distances;
+                        } else {
+                            throw new Error('Invalid format for distances');
+                        }
+                    }
+        
+                    // Handle final_connections
+                    if (importedData.final_connections) {
+                        if (Array.isArray(importedData.final_connections) &&
+                            importedData.final_connections.every(row => Array.isArray(row))) {
+                            final_connections = importedData.final_connections;
+                        } else {
+                            throw new Error('Invalid format for final_connections');
+                        }
+                    }
+
+                    if (importedData.path_elevations) {
+                        if (Array.isArray(importedData.path_elevations) &&
+                            importedData.path_elevations.every(row => Array.isArray(row))) {
+                            path_elevations = importedData.path_elevations;
+                        } else {
+                            throw new Error('Invalid format for path_elevations');
+                        }
+                    }
+
+                    
+                    // Handle lines (polylines)
+                    if (importedData.lines) {
+                        if (Array.isArray(importedData.lines)) {
+                            // Clear existing lines
+                            lines.forEach(line => line.setMap(null));
+                            lines = [];
+                    
+                            // Add imported lines to the map
+                            importedData.lines.forEach(lineData => {
+                                const path = lineData.path.map(point => new google.maps.LatLng(point.lat, point.lng));
+                                const polyline = new google.maps.Polyline({
+                                    path: path,
+                                    strokeColor: lineData.strokeColor,
+                                    strokeOpacity: lineData.strokeOpacity,
+                                    strokeWeight: lineData.strokeWeight,
+                                    map: map // Assuming `map` is the Google Maps instance
+                                });
+                    
+                                google.maps.event.addListener(polyline, 'click', function(e) {
+                                    // Ensure startPoint and endPoint are properly initialized
+                                        const startPoint = path[0];  // First point in the path
+                                        const endPoint = path[path.length - 1]; // Last point in the path
+                                        // Convert points to string to match keys in marker_index
+                                        const startKey = `${startPoint.lat()},${startPoint.lng()}`;
+                                        const endKey = `${endPoint.lat()},${endPoint.lng()}`;
+                    
+                                        // Initialize elevationData, dist, etc.
+                                        const start_index = marker_index.get(startKey);
+                                        const end_index   = marker_index.get(endKey);
+                    
+                                        if (start_index !== undefined && end_index !== undefined) {
+                                            const elevationData = path_elevations[start_index][end_index]; // Ensure path_elevations is correctly defined
+                                            const dist = distances[start_index][end_index]; // Ensure distances is correctly defined
+                                            const labels = Array.from({ length: samples }, (_, k) => Math.floor((dist / (samples - 1) * k)));
+                                            const initial_height = positions[start_index][2]; // Ensure positions is correctly defined
+                                            const last_height = positions[end_index][2];
+                                            const pathData = Array.from({ length: samples }, (_, k) => (((last_height - initial_height) / (samples - 1)) * k + initial_height));
+                                            const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples - 1) * k) * (dist - (dist / (samples - 1) * k)) * 0.06 / dist)))));
+                    
+                                            const contentString = `
+                                                <div>
+                                                    <br><b>Link information:</b></br>
+                                                    <br>Distance: ${dist} Km</br>
+                                                </div>
+                                            `;
+                                            showLineInfo(contentString, elevationData, fresnelData, pathData, labels);
+                                        } else {
+                                            console.warn('Start or end index is undefined in marker_index');
+                                        }
+                                    
+                                });
+                    
+                                lines.push(polyline);
+                            });
+                        } else {
+                            throw new Error('Invalid format for lines');
+                        }
+                    }
+                    // Handle layers and their markers
+                    
+                    
+                    total_labels = appGlobals.total_labels;
+                    node_capacities = appGlobals.node_capacities;
+                    obligatory_nodes = appGlobals.obligatory_nodes;
+                    marker_names = appGlobals.marker_names,
+                    horizontal_azimuths = appGlobals.horizontal_azimuths;
+                    vertical_azimuths  = appGlobals.vertical_azimuths;
+                    roles   = appGlobals.roles,
+                    router_type = appGlobals.router_type,
+                    channel_links = appGlobals.channel_links
+                    
+                    alert('Variables and data imported successfully');
+                } catch (error) {
+                    console.error('Error parsing JSON or importing variables:', error);
+                    alert('Failed to import variables. Please check the file format.');
+                }
+            };
+            reader.readAsText(file);
+        }
+        let map = new google.maps.Map(document.getElementById("map-container"), {
+            zoom: 6,
+            center: position,
+            mapTypeId: "roadmap", 
+        });
+        elevator = new google.maps.ElevationService();
+        drawingManager = new google.maps.drawing.DrawingManager({
+            drawingMode: google.maps.drawing.OverlayType.POLYLINE,
+            drawingControl: false,
+            polylineOptions: {
+            strokeColor: '#ff0000',
+            strokeWeight: 2,
+            },
+        });
+        const controlDiv = document.createElement('div');
+        const controlUI  = document.createElement('div');
+        controlUI.classList.add('custom-map-control-button');
+        controlUI.title     = 'Click to draw a line';
+        controlUI.innerHTML = 'Draw Line';
+        controlUI.addEventListener('click', () => {
+            drawingModeEnabled = !drawingModeEnabled;
+            controlUI.innerHTML = drawingModeEnabled ? 'Exit Draw Mode' : 'Draw Line';
+        });
+        controlDiv.appendChild(controlUI);
+        controlDiv.index = 1;
+        map.controls[google.maps.ControlPosition.TOP_CENTER].push(controlDiv);
+        const slider = document.getElementById("distanceSlider");
+        const output = document.getElementById("distanceValue");
+        // Update the initial value
+        output.textContent = slider.value;
+        dist_thresh = output;
+        // Update the value dynamically as the slider is moved
+        slider.oninput = function() {
+            output.textContent = this.value;
+            dist_thresh = this.value;
+
+        };
+        document.getElementById('new_project').addEventListener('click', function () {
+            document.querySelector('.upload_kml_file').style.display = 'block';
+            document.querySelector('#layer-control').style.display = 'block';
+            document.querySelector('.max_dist_threshold').style.display = 'block';
+            document.querySelector('.other_buttons').style.display = 'block';
+            document.querySelector('.topology-container').style.display = 'block';
+            document.querySelector('.download_button').style.display = 'block';
+            document.querySelector('.first-options').style.display = 'none';
+        });
+        document.getElementById('old_project').addEventListener('click', function () {
+            new_project = false;
+            document.querySelector('.upload_kml_file').style.display = 'block';
+            document.querySelector('.upload_json_file').style.display = 'block';
+            document.querySelector('.max_dist_threshold').style.display = 'block';
+            document.querySelector('.other_buttons').style.display = 'block';
+            document.querySelector('.topology-container').style.display = 'block';
+            document.querySelector('.download_button').style.display = 'block';
+            document.querySelector('.first-options').style.display = 'none';
+        });
+
+
+        document.getElementById('upload_file').addEventListener('click', function () {
+            var fileInput = document.getElementById('file');
+            var file = fileInput.files[0];
+            if (!file) {
+                alert('Please upload an XML file.');
+                return;
+            }
+            if (file.name.endsWith('.kml')) {
+                readXMLFile(file);
+                document.querySelector('.upload_kml_file').style.display = 'none';
+            } else {
+                alert('Unsupported file type. Please upload an XML file.');
+            }
+            
+        });
+
+        document.getElementById('processLayers').addEventListener('click', async function () {
+    
+            // Retrieve the selected options from source and destination layers
+            var selectedSourceLayers = Array.from(document.getElementById('sourceLayers').selectedOptions).map(option => option.value);
+            var selectedDestLayers = Array.from(document.getElementById('destLayers').selectedOptions).map(option => option.value);
+            const spinner = document.getElementById("loading-spinner");
+            spinner.style.display = "block";
+
+            var source_markers = [];
+            var dest_markers = [];
+            var source_labels = [];
+            var dest_labels = [];
+        
+            // Populate source_markers and source_labels based on the selected source layers
+            for (let i = 0; i < selectedSourceLayers.length; i++) {
+                source_markers = source_markers.concat(layers[selectedSourceLayers[i]]);
+                source_labels = source_labels.concat(Array(layers[selectedSourceLayers[i]].length).fill(selectedSourceLayers[i]));
+            }
+        
+            // Populate dest_markers and dest_labels based on the selected destination layers
+            for (let j = 0; j < selectedDestLayers.length; j++) {
+                dest_markers = dest_markers.concat(layers[selectedDestLayers[j]]);
+                dest_labels = dest_labels.concat(Array(layers[selectedDestLayers[j]].length).fill(selectedDestLayers[j]));
+            }
+        
+            // Combine all labels into a single array
+            total_labels = [...source_labels, ...dest_labels];
+            // Create a map that holds arrays of positions for each label
+            
+            for (let i = 0; i < total_labels.length; ++i) {
+                if (layers_positions[total_labels[i]] !== undefined && layers_positions[total_labels[i]].length !== 0) {
+                    positions = positions.concat(layers_positions[total_labels[i]]);
+                }
+                delete layers_positions[total_labels[i]]; // Prevent duplication in subsequent iterations
+                
+                if (layers_positions_map[total_labels[i]] !== undefined && layers_positions_map[total_labels[i]].length !== 0) {
+                    positions_map = positions_map.concat(layers_positions_map[total_labels[i]]);
+                }
+                delete layers_positions_map[total_labels[i]]; // Prevent duplication in subsequent iterations
+                if (markers_name_per_layer[total_labels[i]] !== undefined && markers_name_per_layer[total_labels[i]].length !== 0) {
+                    marker_names = marker_names.concat(markers_name_per_layer[total_labels[i]]);
+                }
+                delete markers_name_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
+            }
+            
+            console.log(positions);
+            console.log(positions_map);
+            console.log(marker_names);
+            for (let i = 0 ; i < positions.length; ++i){
+                const l1 = positions_map[i].lat;
+                const l2 = positions_map[i].lng;
+                const key = `${l1},${l2}`;
+                marker_index.set(key, i);
+            }
+            console.log(marker_index)
+            // Fill matrices and process connections
+            await fill_matrices();
+            console.log("Matrices filled, proceeding to compute possible links");
+            spinner.style.display = "none";
+
+        
+            // Combine all markers into a single array and calculate possible links
+            total_markers = [...source_markers, ...dest_markers];
+            sz_src = source_markers.length;
+            node_capacities = [];
+            for (let i = 0; i < total_labels.length; ++i) {
+                if (total_labels[i] === 'Internet Source') {
+                    node_capacities.push(2000);
+                } else if (total_labels[i] === 'RDA') {
+                    node_capacities.push(1);
+                } else if (total_labels[i] === 'SITEs') {
+                    node_capacities.push(1);
+                } else {
+                    node_capacities.push(0);
+                }
+            }
+            console.log(node_capacities);
+            console.log("computing possible_connections")
+            final_connections = await possible_links(sz_src);
+            // Logging the selections and total connections
+            console.log('Selected Source Layers:', selectedSourceLayers);
+            console.log('Selected Destination Layers:', selectedDestLayers);
+            console.log('Total Connections:', final_connections);
+        });
+
+        document.getElementById("submit_thresh").addEventListener('click', function(){
+            connections = fill_connections();
+        });
+
+        document.getElementById('generate-topology').addEventListener('click', handleGenerateTopology);
+        document.getElementById('close-line-info').addEventListener('click', function() {
+            document.getElementById('line-info').style.display = 'none';
+        });  
+        document.getElementById('saveToLocalStorage').addEventListener('click', saveToLocalStorage);
+        document.getElementById('exportToFile').addEventListener('click', exportToFile);
+        document.getElementById('importButton').addEventListener('click', () => {
+            document.getElementById('importFromFile').click();
+        });
+        document.getElementById('importFromFile').addEventListener('change', importFromFile);
     }
 
     document.getElementById('generate-characteristics').addEventListener('click', function() {
@@ -1002,7 +1205,7 @@
     
         // Populate the table with antenna data (replace with your actual data source)
         var antennaData = [];
-        for (var i = 0; i < total_markers.length; i++) {
+        for (var i = 0; i < positions.length; i++) {
             antennaData.push({
                 "Node Id": i,
                 "Name": marker_names[i],
