@@ -53,10 +53,13 @@ def fill_matrices():
             data = request.json
             positions_map = data.get('positions_map')
             samples = data.get('samples')
-
+            dist_thresh = data.get('threshold')
+            dist_thresh *= 10
             if not positions_map or not samples:
                 return jsonify({"error": "Invalid input"}), 400
-
+            print(positions_map)
+            print(samples)
+            print(dist_thresh)
             sz = len(positions_map)
             distances = [[0 for _ in range(sz)] for _ in range(sz)]
             path_elevations = [[[] for _ in range(sz)] for _ in range(sz)]
@@ -65,12 +68,13 @@ def fill_matrices():
                 print(i)
                 for j in range(i + 1, sz):
                     dst = haversine_distance(positions_map[i], positions_map[j])
+                    print(dst);
                     distances[i][j] = dst
                     distances[j][i] = dst
-                    elev_path = get_elevation_along_path(positions_map[i], positions_map[j], samples) if dst < 15 else [0] * samples
+                    elev_path = get_elevation_along_path(positions_map[i], positions_map[j], samples) if ( dst <= dist_thresh and dst != 0) else [1000] * samples
                     path_elevations[i][j] = elev_path
                     path_elevations[j][i] = elev_path[::-1]  # Reverse the elevation path for the opposite direction
-            print("distances", distances,"path_elevations", path_elevations)
+            print("distances", distances)
             return jsonify({
                 "distances": distances,
                 "path_elevations": path_elevations

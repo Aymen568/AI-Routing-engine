@@ -17,52 +17,45 @@
         <aside id="left-sidebar">
             <div class="sidebar-content">
                 <img src="media/luceor_logo.png" alt="Luceor Logo">
-
                 <h2>Create Your Network Topology</h2>
                 <div class = "first-options">
                     <button id="new_project">New project</button>
                     <button id="old_project">Import existing project</button>
                 </div>
-
                 <div class="upload_kml_file" style="display: none;" >
                     <form enctype="multipart/form-data">
                         <input id="file" name="file" type="file" />
                         <button  type="button" id="upload_file">Upload KML file</button>
                     </form>
                 </div>
-                
                 <div class="upload_json_file" style="display: none;" >
                     <input type="file" id="importFromFile" accept=".json" />
                     <button id="importButton" >Upload Json File</button>
                 </div>
-
                 <div id="layer-controls"></div>
-                <div id="layer-control" style="display: none;">
-                    <h2>Select Source and Destination Layers</h2>
-                    <div class="source-layers">
-                        <label for="sourceLayers">Source Layers:</label>
-                        <select id="sourceLayers" name="sourceLayers" multiple required>
-                        </select>
-                    </div>
-                    <div class="dest-layers">
-                        <label for="destLayers">Destination Layers:</label>
-                        <select id="destLayers" name="destLayers" multiple required>
-                        </select>
-                    </div>
-                    <button type="button" id="processLayers">Process Layers</button>
-                </div>
-                <div class="max_dist_threshold" style="display: none;">
+                <div class="dist_threshold" style="display: none;">
                     <label for="distanceSlider">Select Distance (km):</label>
                     <input type="range" id="distanceSlider" min="1" max="100" value="50" step="1">
                     <span id="distanceValue">50 km</span>
-                    <button type="button" id="submit_thresh">Submit threshold</button>
+                </div>
+                <div id="layer-control" style="display: none;">
+                        <button type="button" id="processLayers">Process Layers</button>
                 </div>
                 <div class="other_buttons" style="display: none;">
-                    <button id="saveToLocalStorage" >Save to Local Storage</button>
-                    <button id="exportToFile" >Export to File</button>
+                    <button id="exportToFile" >Save and Export to File</button>
                 </div>
                 <div class="topology-container" style="display: none;" >
                     <button type="button" id="generate-topology">Generate Topology</button>
+                </div>
+                <div class="customizenode" style="display: none;">
+                    <button id="customize_heights">Change Node Height</button>
+                    <div id="heightForm" style="display: none;">
+                        <label for="currentHeight">Current Height:</label>
+                        <span id="currentHeight"></span><br>
+                        <label for="newHeight">New Height:</label>
+                        <input type="number" id="newHeight" step="1"><br>
+                        <button id="updateHeightButton">Update Height</button>
+                    </div>
                 </div>
                 <div class="antenna_characteristics" style="display: none;">
                     <button type="button" id="generate-characteristics">Topology characteristics</button>
@@ -100,7 +93,6 @@
                     <th>Roles</th>
                     <th>horizontal Azimuth</th>
                     <th>Vertical Azimuth</th>
-                    <th>Channel</th>
                 </tr>
             </thead>
             <tbody id="antennaTableBody">
@@ -117,6 +109,7 @@
     let lines   = [];
     let triangles= [];
     let positions = [];
+    let antenna_heights= [];
     let positions_map = [];
     let desired_rates = [];
     let chartInstance;
@@ -124,14 +117,11 @@
     let marker1 = null;
     let marker2 = null;
     let drawingModeEnabled = false;
-    let channel_colors = {};
-    let bandwidth = 20*1e6;
-    let available_channels = [52, 100];
+    let colors = {};
     let roles = [];
     let horizontal_azimuths =[];
     let vertical_azimuths=[];
     let router_type =[];
-    let channel_links = [];
     let upload  =false;
     let path_elevations = [];
     let distances       = [];
@@ -148,18 +138,16 @@
     let layers_positions = {};
     let layers_positions_map ={}; 
     let markers_name_per_layer = {};
+    let antenna_heights_per_layer = {};
     let marker_names = [];
-    let connections      = [];
-    let layers           = { };
+    let layers           = {};
     let layerControls    = {};
     let xmlContent       = '';
-    let xmlDoc ;
-    let global_max_threshold = 10;
+    let xmlDoc;
     let globalVariable;
     let new_project = true;
+    let marker2update = false;
     const position = { lat: 24.6986413, lng: 44.0534141 };
-
-
     async function initMap() {
 
         function handleMarkerClick(marker) {
@@ -174,6 +162,47 @@
                 marker2 = null;
             }
         }
+
+        function select_marker2change_heights(marker) {
+                const index = marker_index.get(`${marker.getPosition().lat()},${marker.getPosition().lng()}`);
+                if (index !== undefined) {
+                    // Display current height
+                    displayCurrentHeight(index);
+        
+                    // Show the height form
+                    showHeightForm(index);
+                } else {
+                    alert('Marker not found. Please enter valid coordinates.');
+                }
+
+        }
+
+        function updateHeight(index) {
+            const newHeight = parseInt(document.getElementById('newHeight').value, 10);
+            if (!isNaN(newHeight)) {
+                antenna_heights[index] = newHeight;  // Update the height
+                alert(`Height updated to ${newHeight} for marker at index ${index}`);
+                
+                // Hide the height form after updating
+                document.getElementById('heightForm').style.display = 'none';
+            } else {
+                alert('Please enter a valid number for the new height.');
+            }
+        }
+        
+        // Function to display the current height of the marker
+        function displayCurrentHeight(index) {
+            document.getElementById('currentHeight').textContent = antenna_heights[index];
+        }
+        
+        // Function to show the form to change the height
+        function showHeightForm(index) {
+            document.getElementById('heightForm').style.display = 'block';
+        
+            // Add event listener to update button
+            document.getElementById('updateHeightButton').onclick = () => updateHeight(index);
+        }
+        
 
         function drawLineBetweenMarkers(marker1, marker2) {
             const path = [marker1.getPosition(), marker2.getPosition()];
@@ -192,15 +221,14 @@
         }
 
         function plot_elevation_data(marker1, marker2){
-            console.log(marker_index);
             const start_index = marker_index.get(`${marker1.getPosition().lat()},${marker1.getPosition().lng()}`);
             const end_index   = marker_index.get(`${marker2.getPosition().lat()},${marker2.getPosition().lng()}`);
             console.log("start_index", start_index,"end_index", end_index);
             const dist  =  distances[start_index][end_index];
             const elevationData = path_elevations[start_index][end_index];
             const labels = Array.from({ length:samples}, (_, k) => Math.floor((dist / (samples-1) * k )));
-            const initial_height = positions[start_index][2];
-            const last_height    = positions[end_index][2];     
+            const initial_height = positions[start_index][2] + antenna_heights[start_index];
+            const last_height    = positions[end_index][2] + antenna_heights[end_index];     
             const pathData = Array.from({ length:samples}, (_, k) => (((last_height - initial_height)/ (samples-1) ) * k + initial_height ));     
             const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples-1) * k ) * (dist -(dist / (samples-1) * k )) * 0.06/ dist))))); 
             showLineInfo(`distance :${dist} km`, elevationData,fresnelData,pathData,labels);
@@ -244,7 +272,7 @@
                 if (!layers[folderName]) {
                     layers[folderName] = [];
                     addLayerControls(folderName);
-                    populateLayerOptions(folderName); // Populate select options
+                    // Populate select options
                 }
                 const placemarks = folder.getElementsByTagName('Placemark');
                 // Process placemarks asynchronously
@@ -257,7 +285,6 @@
                     var antenna_height = maxHeightElement ? parseFloat(maxHeightElement.textContent) : 5;
                     if (new_project){
                         var elevation = await getElevation({ lat: latitude, lng: longitude });
-                        elevation += antenna_height;
                         if (!layers_positions_map[folderName]) {
                             layers_positions_map[folderName] = [];
                         }
@@ -267,9 +294,13 @@
                         if (!layers_positions[folderName]) {
                             layers_positions[folderName] = [];
                         }
+                        if (!antenna_heights_per_layer[folderName]) {
+                            antenna_heights_per_layer[folderName] = [];
+                        }
                         layers_positions_map[folderName].push({ lat: latitude, lng: longitude });
                         layers_positions[folderName].push([latitude, longitude, elevation]);
                         markers_name_per_layer[folderName].push(name);
+                        antenna_heights_per_layer[folderName].push(antenna_height);
                     }
                     const marker = new google.maps.Marker({
                         position: { lat: latitude, lng: longitude },
@@ -285,6 +316,10 @@
                         if (drawingModeEnabled) {
                             handleMarkerClick(marker);
                         } 
+                        if (marker2update){
+                            select_marker2change_heights(marker);
+                            marker2update = false;
+                        }
                     });
                     markers.push(marker);
                 }
@@ -320,21 +355,6 @@
             }
         }
 
-        function populateLayerOptions(folderName) {
-            // Populate Source Layers
-            var sourceLayerSelect = document.getElementById('sourceLayers');
-            var option = document.createElement('option');
-            option.value = folderName;
-            option.textContent = folderName;
-            sourceLayerSelect.appendChild(option);
-            // Populate Destination Layers
-            var destLayerSelect = document.getElementById('destLayers');
-            var option2 = document.createElement('option');
-            option2.value = folderName;
-            option2.textContent = folderName;
-            destLayerSelect.appendChild(option2);
-        }
-        
         function isLayerVisible(folderName) {
             return layerControls[folderName] && layerControls[folderName].checked;
         }
@@ -360,28 +380,6 @@
             }
         }
         
-        function fill_connections() {
-            let sz = positions.length;    
-            let possible_conns = Array.from({ length: sz }, () => []);
-            console.log(final_connections)
-            for (let i = 0; i < sz - 1; i++) {
-                console.log("node_index",i);
-                for (let j of final_connections[i]) {
-                    if (distances[i][j] <= dist_thresh) {
-                            console.log(j)
-                            if (!possible_conns[i].includes(j)) {
-                                possible_conns[i].push(j);
-                            }
-                            if (!possible_conns[j].includes(i)) {
-                                possible_conns[j].push(i);
-                            }
-                    }
-                }
-            }
-            console.log("final_connections", possible_conns)
-            return possible_conns;
-        }
-    
         function possible_links(sz_src) {
             let sz1 = positions.length;
             let total_connections = Array.from({ length: sz1 }, () => []); // Initialize with empty arrays
@@ -393,10 +391,10 @@
                     // Find the start and end positions in the positions_map
                     let pathClear = true;
                     let dst = distances[i][j];
-                    if (dst <= global_max_threshold) {
+                    if (dst <= dist_thresh) {
                         const path_elevation = path_elevations[i][j];
-                        const elevationStart = positions[i][2];
-                        const elevationEnd = positions[j][2];
+                        const elevationStart = positions[i][2] + antenna_heights[i];
+                        const elevationEnd = positions[j][2]+ antenna_heights[j];
                         const labels = Array.from({ length: path_elevation.length }, (_, k) => (dst / (samples-1) * k ));
                         for (let k = 1; k < path_elevation.length - 1; k++) {
                             let elevation = path_elevation[k];
@@ -415,7 +413,7 @@
                     } 
                 }
             }
-        
+            console.log(total_connections);
             return total_connections;
         }
 
@@ -431,6 +429,7 @@
                     },
                     body: JSON.stringify({
                         positions_map: positions_map,
+                        threshold :dist_thresh,
                         samples: samples,
                     }),
                 });
@@ -488,20 +487,13 @@
             roles = [];
             horizontal_azimuths= [];
             vertical_azimuths = []
-            channel_links  =[];
-            available_channels.forEach(channel => {
-                channel_colors[channel] = getRandomColor();
-            });
             const formData = {
                 "n": sz_src,
                 "positions": positions,
                 "labels": total_labels,
                 "distances": distances,
                 "obligatory_nodes": obligatory_nodes,
-                "possible_connections": connections, 
-                "node_capacities": node_capacities,
-                "bandwidth": bandwidth ,
-                "available_channels": available_channels
+                "possible_connections": final_connections
             };
             console.log(formData);
             await fetch('http://localhost:5000/generate_topology', {
@@ -523,15 +515,10 @@
                     roles= []
                     horizontal_azimuths = [];
                     vertical_azimuths = [];
-                    channel_link = [];
                     router_type = [];
                     generateTopologyClicked = true;
                     const topology = response.node_tree;
                     const connections = response.node_list;
-                    const rates = response.data_list;
-                    const capacities = response.capacities;
-                    const consumed_rates = response.consumed_rates;
-                    const channel_array = response.channel_array;
                     const connection_boundaries = response.connection_boundaries;
                     const horizontal_azimuth = response.horizontal_azimuth;
                     const vertical_azimuth = response.vertical_azimuth;
@@ -539,7 +526,6 @@
                         let rl = '';
                         let horizontal_az = 0;
                         let vertical_az = 0;
-                        let ch = '';
                         let rt_type;
                         if (topology[i].length > 0) {
                             rl = 'Ap' + rl;
@@ -548,8 +534,6 @@
                             console.log(horizontal_az);
                             vertical_az = Math.ceil(vertical_azimuth[i]);
                             console.log(vertical_az);
-                            ch += channel_array[i][1].toString();
-                            ch += " ";
                             rt_type = "StartMesh HD";
                             if (topology[i].length > 1){
                                 rt_type = "Sector M90";
@@ -563,7 +547,7 @@
                                     end1, 
                                     end2
                                 ];
-                                const color = channel_colors[channel_array[i][1]];
+                                const color = getRandomColor();
                                 const triangle = new google.maps.Polygon({
                                     paths: triangleCoords,
                                     strokeColor: color,
@@ -580,17 +564,13 @@
                         if (i>= sz_src && connections[i]!== -1) {
                             rt_type = "StartMesh HD";
                             rl += ' Client';
-                            ch += channel_array[i][0].toString();
+    
                             const startCoords = positions_map[i];
                             const endCoords   = positions_map[connections[i]];
-                            const rate        = Math.ceil(rates[i]);
-                            const consumed_rate = Math.ceil(consumed_rates[i]);
-                            const cap  = Math.ceil(capacities[i][connections[i]]);
                             const dist = distances[i][connections[i]] ;
                             const center = positions_map[connections[i]];
                             const radius = distances[i][connections[i]];
                             const path = [startCoords, endCoords];
-                            const channel = channel_array[i][0]
                             let Data = [];
                             
                             const line = new google.maps.Polyline({
@@ -612,18 +592,14 @@
                             google.maps.event.addListener(line, 'click', function(e) {
                                 const elevationData = path_elevations[i][connections[i]];
                                 const labels = Array.from({ length:samples}, (_, k) => Math.floor((dist / (samples -1) * k )));
-                                const initial_height = positions[i][2];
-                                const last_height    = positions[connections[i]][2];  
+                                const initial_height = positions[i][2] + antenna_heights[i];
+                                const last_height    = positions[connections[i]][2] + antenna_heights[connections[i]];  
                                 const pathData = Array.from({ length:samples}, (_, k) => (((last_height - initial_height)/ (samples -1  )) * k + initial_height ));
                                 const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples-1) * k ) * (dist -(dist / (samples-1) * k )) * 0.06/ dist))))); 
                                 const contentString = `
                                     <div>
                                         <br><b>Link informations:</b></br>
-                                        <br>Capacity: ${cap} Mbps</br>
                                         <br>Distance: ${dist} Km</br>
-                                        <br>Current rate: ${rate} Mbps</br>
-                                        <br>Channel: ${channel} </br>
-                                        
                                     </div>
                                 `;
                                 showLineInfo(contentString, elevationData,fresnelData, pathData,labels);
@@ -636,13 +612,11 @@
                             rl = '-';
                             horizontal_az = 0;
                             vertical_az = 0;
-                            ch = 0;
                             rt_type = '-';
                         }
                         roles.push(rl);
                         horizontal_azimuths.push(horizontal_az)
-                        vertical_azimuths.push(vertical_az)
-                        channel_links.push(ch);
+                        vertical_azimuths.push(vertical_az);
                         router_type.push(rt_type);
 
                     }
@@ -664,7 +638,7 @@
         function show_topology_error() {
             document.querySelector('.antenna_characteristics').style.display = 'block';
             for (let i = 0; i < total_sz; i++) {
-                for (let j of connections[i]) {  // Iterating over the elements of connections[i]
+                for (let j of final_connections[i]) {  // Iterating over the elements of connections[i]
                     const dist = distances[i][j];
                     const startCoords = positions_map[i];
                     const endCoords = positions_map[j];  // 'j' directly represents the connected node
@@ -683,8 +657,8 @@
                         const elevationData = path_elevations[i][j];  // Access elevation data correctly
                         const labels = Array.from({ length: samples }, (_, k) => Math.floor((dist / (samples - 1) * k)));
         
-                        const initial_height = positions[i];
-                        const last_height    = positions[connections[i]];  
+                        const initial_height = positions[i] + antenna_heights[i];
+                        const last_height    = positions[connections[i]] + antenna_heights[j];  
                         const pathData = Array.from({ length: samples }, (_, k) => 
                             ((last_height - initial_height) / (samples - 1)) * k + initial_height
                         );
@@ -818,7 +792,7 @@
             updateAndDownloadKML(lines);
         });
 
-        function saveToLocalStorage() {
+        function save_and_export() {
             const marker_index_array = Array.from(marker_index.entries());
             const lines_array = lines.map(line => ({
                 path: line.getPath().getArray().map(latlng => ({ lat: latlng.lat(), lng: latlng.lng() })),  // Extract path as an array of lat/lng objects
@@ -834,25 +808,35 @@
                 distances,
                 positions,
                 positions_map,
+                antenna_heights,
                 path_elevations,
                 final_connections,
                 distances,
                 total_labels,
                 sz_src,
                 obligatory_nodes,
-                node_capacities,
                 marker_names,
-                horizontal_azimuths,
-                vertical_azimuths,
-                roles,
-                horizontal_azimuths,
-                vertical_azimuths,
-                router_type,
-                channel_links,
             };
-            localStorage.setItem('globalVariables', JSON.stringify(globalVariables));
-            alert('Variables saved to local storage.');
+            // Convert the object to a JSON string
+            const jsonString = JSON.stringify(globalVariables, null, 2);  // Pretty print JSON with indentation
+
+            // Create a Blob from the JSON string
+            const blob = new Blob([jsonString], { type: 'application/json' });
+
+            // Create a link element to download the Blob
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = 'exported_data.json';  // Set the download filename
+
+            // Append the link to the body and click it to start the download
+            document.body.appendChild(link);
+            link.click();
+
+            // Remove the link after the download
+            document.body.removeChild(link);
         }
+            
+        
 
         function importFromFile(event) {
             const appGlobals = {};
@@ -978,15 +962,15 @@
                                             const elevationData = path_elevations[start_index][end_index]; // Ensure path_elevations is correctly defined
                                             const dist = distances[start_index][end_index]; // Ensure distances is correctly defined
                                             const labels = Array.from({ length: samples }, (_, k) => Math.floor((dist / (samples - 1) * k)));
-                                            const initial_height = positions[start_index][2]; // Ensure positions is correctly defined
-                                            const last_height = positions[end_index][2];
+                                            const initial_height = positions[start_index][2] + antenna_heights[start_index]; // Ensure positions is correctly defined
+                                            const last_height = positions[end_index][2] + antenna_heights[end_index];
                                             const pathData = Array.from({ length: samples }, (_, k) => (((last_height - initial_height) / (samples - 1)) * k + initial_height));
                                             const fresnelData = Array.from({ length: samples }, (_, k) => (pathData[k] - (17.32 * Math.sqrt(((dist / (samples - 1) * k) * (dist - (dist / (samples - 1) * k)) * 0.06 / dist)))));
                     
                                             const contentString = `
                                                 <div>
                                                     <br><b>Link information:</b></br>
-                                                    <br>Distance: ${dist} Km</br>
+                                                    <br> Distance: ${dist} Km</br>
                                                 </div>
                                             `;
                                             showLineInfo(contentString, elevationData, fresnelData, pathData, labels);
@@ -1006,14 +990,9 @@
                     
                     
                     total_labels = appGlobals.total_labels;
-                    node_capacities = appGlobals.node_capacities;
                     obligatory_nodes = appGlobals.obligatory_nodes;
-                    marker_names = appGlobals.marker_names,
-                    horizontal_azimuths = appGlobals.horizontal_azimuths;
-                    vertical_azimuths  = appGlobals.vertical_azimuths;
-                    roles   = appGlobals.roles,
-                    router_type = appGlobals.router_type,
-                    channel_links = appGlobals.channel_links
+                    marker_names = appGlobals.marker_names;
+                    antenna_heights =  appGlobals.antenna_heights;
                     
                     alert('Variables and data imported successfully');
                 } catch (error) {
@@ -1053,31 +1032,33 @@
         const output = document.getElementById("distanceValue");
         // Update the initial value
         output.textContent = slider.value;
-        dist_thresh = output;
+        dist_thresh = parseInt(slider.value, 10);  // Convert to integer
+
         // Update the value dynamically as the slider is moved
         slider.oninput = function() {
             output.textContent = this.value;
-            dist_thresh = this.value;
-
+            dist_thresh = parseInt(this.value, 10);  // Convert to integer
         };
         document.getElementById('new_project').addEventListener('click', function () {
             document.querySelector('.upload_kml_file').style.display = 'block';
             document.querySelector('#layer-control').style.display = 'block';
-            document.querySelector('.max_dist_threshold').style.display = 'block';
+            document.querySelector('.dist_threshold').style.display = 'block';
             document.querySelector('.other_buttons').style.display = 'block';
             document.querySelector('.topology-container').style.display = 'block';
             document.querySelector('.download_button').style.display = 'block';
+            document.querySelector('.customizenode').style.display = 'block';
             document.querySelector('.first-options').style.display = 'none';
+            
         });
         document.getElementById('old_project').addEventListener('click', function () {
             new_project = false;
             document.querySelector('.upload_kml_file').style.display = 'block';
             document.querySelector('.upload_json_file').style.display = 'block';
-            document.querySelector('.max_dist_threshold').style.display = 'block';
-            document.querySelector('.other_buttons').style.display = 'block';
             document.querySelector('.topology-container').style.display = 'block';
             document.querySelector('.download_button').style.display = 'block';
+            document.querySelector('.customizenode').style.display = 'block';
             document.querySelector('.first-options').style.display = 'none';
+
         });
 
 
@@ -1100,8 +1081,8 @@
         document.getElementById('processLayers').addEventListener('click', async function () {
     
             // Retrieve the selected options from source and destination layers
-            var selectedSourceLayers = Array.from(document.getElementById('sourceLayers').selectedOptions).map(option => option.value);
-            var selectedDestLayers = Array.from(document.getElementById('destLayers').selectedOptions).map(option => option.value);
+            var selectedSourceLayers = ['Internet Source'];
+            var selectedDestLayers = ['TOTEM_SA','SITEs','RDA'];
             const spinner = document.getElementById("loading-spinner");
             spinner.style.display = "block";
 
@@ -1140,6 +1121,11 @@
                     marker_names = marker_names.concat(markers_name_per_layer[total_labels[i]]);
                 }
                 delete markers_name_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
+
+                if (antenna_heights_per_layer[total_labels[i]] !== undefined && antenna_heights_per_layer[total_labels[i]].length !== 0) {
+                    antenna_heights = antenna_heights.concat(antenna_heights_per_layer[total_labels[i]]);
+                }
+                delete antenna_heights_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
             }
             
             console.log(positions);
@@ -1182,16 +1168,17 @@
             console.log('Total Connections:', final_connections);
         });
 
-        document.getElementById("submit_thresh").addEventListener('click', function(){
-            connections = fill_connections();
-        });
-
+        
         document.getElementById('generate-topology').addEventListener('click', handleGenerateTopology);
+        document.getElementById('customize_heights').addEventListener('click', () => {
+            // Example: Selecting the first marker in the list for demonstration
+            
+            marker2update = true;
+        });
         document.getElementById('close-line-info').addEventListener('click', function() {
             document.getElementById('line-info').style.display = 'none';
         });  
-        document.getElementById('saveToLocalStorage').addEventListener('click', saveToLocalStorage);
-        document.getElementById('exportToFile').addEventListener('click', exportToFile);
+        document.getElementById('exportToFile').addEventListener('click', save_and_export);
         document.getElementById('importButton').addEventListener('click', () => {
             document.getElementById('importFromFile').click();
         });
@@ -1213,7 +1200,6 @@
                 "Roles": roles[i],
                 "Horizontal Azimuth": horizontal_azimuths[i] !== 0 ? horizontal_azimuths[i] : "-",
                 "Vertical Azimuth": vertical_azimuths[i] !== 0 ? vertical_azimuths[i] : "-",
-                "Channel": channel_links[i] !== 0 ? channel_links[i] : "-",
             });
         }
         console.log("Antenna Data:", antennaData); // Debugging: Check if data is populated
@@ -1250,9 +1236,6 @@
             verticalAzCell.textContent = antenna['Vertical Azimuth'];
             row.appendChild(verticalAzCell);
     
-            var channelCell = document.createElement('td');
-            channelCell.textContent = antenna['Channel'];
-            row.appendChild(channelCell);
     
             tableBody.appendChild(row);
             console.log("Appended row:", row); // Debugging

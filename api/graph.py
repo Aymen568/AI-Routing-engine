@@ -10,30 +10,13 @@ import heapq
 import networkx as nx
 from networkx.algorithms.approximation import steiner_tree
 
-Tx  = 33             # dBm 
-N0  = 4.002 * 1e-21  # W/Hz 
-P_t = 2             # W
-c = 3 * 1e8         # m/s 
-f = 5 * 1e9         # Hz
-cap_sup = 1e7
-Gt = 17
-Gr = 17
-INF = 1e6
-MAX_CONSUMPTION = 1000 # MHz
-MAX_PENALTY     = 1e6
+
 desired_consumptions  = []
 dummy_node = 2000
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization"])
 
-def link_capacity(dst, bandwidth, frequency):
-    if dst == 0 :
-        print("we're having zero")
-    denom = N0 * bandwidth * ((4 * np.pi * dst * frequency / c) ** 2)  # corrected
-    SNR = (P_t * Gt * Gr) / denom  # simplified
-    capacity = (bandwidth * math.log2(1 + SNR)) / 1e6  # converted to Mbps
-    return capacity
 
 def spherical_to_cartesian(lat, lon, alt):
     R = 6371.0  # Radius of Earth in km
@@ -143,74 +126,8 @@ def compute_boundaries(n, total_sz, positions, tree):
 
     return upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation, azimuth_index
 
-def create_interference_list(n, total_sz, positions, tree, node_list, upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation):
-    interference_list = [[] for _ in range(total_sz)]
-    
-    # Convert all positions to Cartesian coordinates
-    positions_cartesian = [spherical_to_cartesian(positions[i][0], positions[i][1], positions[i][2]) for i in range(total_sz)]
-
-    for i in range(total_sz):
-        if len(tree[i]) > 1:
-            ref_position = positions_cartesian[tree[i][0]]
-            for j in range(total_sz):
-                if j != i and node_list[j]!= -1 and j not in tree[i] :
-                    azimuth = calculate_azimuth_cartesian(positions_cartesian[i][0], positions_cartesian[i][1],ref_position[0], ref_position[1], positions_cartesian[j][0], positions_cartesian[j][1])
-                    elevation = calculate_elevation_cartesian(positions_cartesian[i][0], positions_cartesian[i][2],ref_position[0], ref_position[2], positions_cartesian[j][0], positions_cartesian[j][2])
-
-                    if (lower_bounds_azimuth[i] <= azimuth <= upper_bounds_azimuth[i] and
-                        lower_bounds_elevation[i] <= elevation <= upper_bounds_elevation[i]):
-                        interference_list[i].append(j)
-
-    return interference_list
-
-def create_interference_levels(n,total_sz,node_tree, channel_array, interference_list):
-    interference_level = [1 for _ in range(total_sz)]
-    for i in range(n, total_sz):
-        ch = channel_array[i][1]
-        for u in interference_list[i]:
-            ch1 = channel_array[u][0]
-            interference_level[u] += (ch == ch1)
-    return interference_level
-
-def capacity_with_interference(n,total_sz,capacity, node_tree, interference_level):
-    capacity_cp = [list(lst) for lst in capacity]
-    for i in range(total_sz):
-        for node in node_tree[i]:
-                capacity_cp[i][node] /= (len(node_tree[i]) + interference_level[node])
-    return capacity_cp
-
 ##########################################################
 
-
-
-
-def nb_hope(n,m,node_tree):
-    saut = [0 for _ in range(n + m)]
-    visited = [i for i in range(n) ]
-    i = 0
-    sz = n
-    while i < sz:
-        f = visited[i]
-        i += 1
-        for u in node_tree[f]:
-            saut[u] = saut[f] + 1
-            visited.append(u)
-            sz += 1
-    return saut
-
-def evaluate(n,m,distances, capacities,desired_consumptions,node_tree, consumed_rates):
-    max_capacities = [max(capacities[i]) for i in range(n, n + m)]
-    contributions = [0 for _ in range(n + m)]
-    saut = nb_hope(n,m,node_tree)
-    total_cost = 0
-    for prt in range(n + m):
-        for u in node_tree[prt]:
-            single_cost = 0.6* max((desired_consumptions[u] - consumed_rates[u]) / max(desired_consumptions[u],1) * 100, 1) +0.4 * saut[u] * distances[u][prt]
-            if ((consumed_rates[u] == 0 and desired_consumptions[u] !=0) ) :
-                 single_cost = MAX_PENALTY
-            total_cost += single_cost 
-            contributions[u] = single_cost
-    return total_cost, contributions
 
 def get_child(node_tree, index1):
     childs = []
@@ -221,63 +138,6 @@ def get_child(node_tree, index1):
             childs.append(child)
             stack.append(child)
     return childs
-
-def calculate_total_demand(index,node_tree, desired_consumptions, total_demand):
-    total = desired_consumptions[index]  # Start with the demand of the current node
-    for child in node_tree[index]:
-        total += calculate_total_demand(child, node_tree,  desired_consumptions, total_demand)
-    total_demand[index] = total
-    return total
-
-def fill_graphs(n,total_sz,positions,distances,capacities,desired_consumptions,node_tree, node_list,channel_array):
-    forward_rates = [desired_consumptions[i] if i < n else 0 for i in range(total_sz)]
-    input_rates = [0 for i in range(total_sz)]
-    consumed_rates = [0 for i in range(total_sz)]
-    node_tree1 = [list(lst) for lst in node_tree]
-    upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation,azimuth_index = compute_boundaries( n, total_sz, positions, node_tree1 )
-    interference_list = create_interference_list(n,total_sz, positions,node_tree1, node_list, upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation)
-    interference_levels = create_interference_levels(n,total_sz,node_tree1, channel_array, interference_list)
-    capacities_cp = capacity_with_interference(n,total_sz,capacities, node_tree1, interference_levels)
-    total_demand = [0 for i in range(total_sz)]
-    for i in range(n):
-        total = calculate_total_demand( i,node_tree1, desired_consumptions,total_demand)
-    for i in range(total_sz):
-        node_tree1[i].sort(key=lambda x: distances[i][x])
-    visited = [i for i in range(n)]
-    i = 0
-    sz = n
-    while i < sz:
-        f = visited[i]
-        i += 1
-        for u in node_tree1[f]:
-            input_rates[u] = min(forward_rates[f], min(total_demand[u], capacities_cp[f][u]))
-            consumed_rates[u] = min(input_rates[u], desired_consumptions[u])
-            forward_rates[u] = input_rates[u] - consumed_rates[u]
-            visited.append(u)
-            forward_rates[f] -= input_rates[u]
-            sz += 1
-    return input_rates, consumed_rates, forward_rates, interference_levels, capacities_cp, azimuth_index
-
-def generate_channels(n,total_sz,positions,available_channels,topology, node_list):
-    channel_array = [[0, 0] for _ in range(total_sz)]
-    upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation,azimuth_index = compute_boundaries( n, total_sz, positions,topology)
-    interference_list = create_interference_list(n,total_sz, positions,topology,node_list, upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation)
-    for i in range(total_sz):
-        if len(topology[i]) > 0:
-                map_ch = {ch: 0 for ch in available_channels }
-                map_ch[channel_array[i][0]] = INF 
-                for interferent_node in interference_list[i]:
-                    if channel_array[interferent_node][0] != 0:
-                        ch = channel_array[interferent_node][0]
-                        map_ch[ch] += 1
-                chosen = min(map_ch, key=map_ch.get)
-                
-                channel_array[i][1] = chosen
-                for child in topology[i]:
-                    channel_array[child][0] = chosen
-    return channel_array
-
-
 
 def build_graph(n,total_sz,distances, possible_connections,total_labels):
     G = nx.Graph() 
@@ -290,13 +150,14 @@ def build_graph(n,total_sz,distances, possible_connections,total_labels):
         for j in possible_connections[i]:
             cost = distances[i][j] 
             if (total_labels[i] ==  'SITEs'  and  total_labels[j] ==  'SITEs'):
-                cost += 10000
-            if (total_labels[i] ==  'TOTEM_SA'  or  total_labels[j] ==  'TOTEM_SA'): 
-                cost +=  100000000
-            if (total_labels[i] ==  'SITEs'  or  total_labels[j] ==  'SITEs'):
-                cost +=  100
-            if (total_labels[i] ==  'RDA'  or  total_labels[j] ==  'RDA'):
-                cost +=  3
+                cost += 100
+            else:
+                if (total_labels[i] ==  'TOTEM_SA'  or  total_labels[j] ==  'TOTEM_SA'): 
+                    cost +=  10000
+                if (total_labels[i] ==  'SITEs'  or  total_labels[j] ==  'SITEs'):
+                    cost +=  100
+                if (total_labels[i] ==  'RDA'  or  total_labels[j] ==  'RDA'):
+                    cost +=  3
                 
             G.add_edge(i,j,weight = cost)
     return G
@@ -382,7 +243,7 @@ def generate_topology():
             json_data = request.get_json()  # Retrieve JSON data from the request
             print("Received JSON data:", json_data)
             # Ensure all required keys are present in json_data
-            required_keys = ['n', 'positions', 'labels','distances', 'obligatory_nodes', 'possible_connections', 'node_capacities','bandwidth','available_channels']
+            required_keys = ['n', 'positions', 'labels','distances', 'obligatory_nodes', 'possible_connections']
             for key in required_keys:
                 if key not in json_data:
                     print(key)
@@ -395,16 +256,11 @@ def generate_topology():
             distances = json_data['distances']
             possible_connections = json_data['possible_connections']
             obligatory_nodes = json_data['obligatory_nodes']
-            desired_consumptions = json_data['node_capacities']
-            band_width =  json_data['bandwidth']
-            available_channels = json_data['available_channels']
             obligatory_nodes = [i for i in range(n)] + obligatory_nodes        
             total_sz =  len(labels)
-            capacities =  [[link_capacity(distances[i][j] * 1000, band_width, f) if i!=j else 0 for j in range(total_sz) ] for i in range(total_sz)]
             g = build_graph(n,total_sz,distances, possible_connections,labels)
             node_tree = [[] for _ in range(total_sz)]
             node_list = [-1 for _ in range(total_sz)]
-            channel_array = [[0,0] for _ in range(total_sz)]
             visited = possible_problem(n, total_sz,obligatory_nodes, g)
             sol = all([visited[i] == 1 for i in obligatory_nodes])
             print(sol)
@@ -417,22 +273,16 @@ def generate_topology():
                 print(f"Edge ({u}, {v}) with attributes: {data}")
             # Looping over the edges of the Steiner tree
             node_list, node_tree = fill_topology(st,total_sz,obligatory_nodes)
-            channel_array = generate_channels(n,total_sz,positions,available_channels,node_tree, node_list)
-            input_rates, consumed_rates, forward_rates, interference_levels, capacities_cp, azimuth_index = fill_graphs(n,total_sz,positions,distances,capacities,desired_consumptions,node_tree, node_list,channel_array)
             upper_bounds_azimuth, lower_bounds_azimuth, upper_bounds_elevation, lower_bounds_elevation, azimuth_index = compute_boundaries(n, total_sz, positions, node_tree)
             horizontal_azimuth = [upper - lower for upper, lower in zip(upper_bounds_azimuth, lower_bounds_azimuth)]
             vertical_azimuth = [upper - lower for upper, lower in zip(upper_bounds_elevation, lower_bounds_elevation)]
             response = {'state': 1,
                                 'node_list' : node_list ,
                                 'node_tree' : node_tree ,
-                                'channel_array' :channel_array,
                                 'connection_boundaries': azimuth_index,
-                                'data_list': input_rates,
-                                'consumed_rates'   : consumed_rates,
                                 'horizontal_azimuth' : horizontal_azimuth,
                                 'vertical_azimuth':vertical_azimuth,
-                                'capacities': capacities_cp,
-                            }
+                        }
             print(response)
             response = jsonify(response)
             response.headers.add('Access-Control-Allow-Origin', '*')
