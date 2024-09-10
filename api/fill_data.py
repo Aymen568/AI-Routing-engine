@@ -1,14 +1,17 @@
 import json
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request,Response
 from flask_cors import CORS
+from flask_sse import sse
 import requests
 import math
+import time
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}}, allow_headers=["Content-Type", "Authorization"])
 
 # Replace with your actual Google Maps API Key
 GOOGLE_API_KEY = "AIzaSyBeya4HQeQc6Ps1nROlox3qrQV3fbrJRAc"
+progress = {"percentage": 0}
 
 
 def haversine_distance(coord1, coord2):
@@ -48,13 +51,13 @@ def get_elevation_path(loc1, loc2,samples):
 
 @app.route('/fill-matrices', methods=['POST','OPTIONS'])
 def fill_matrices():
+    global progress
     try:
         if request.method == 'POST':
             data = request.json
             positions_map = data.get('positions_map')
             samples = data.get('samples')
             dist_thresh = data.get('threshold')
-            dist_thresh *= 10
             if not positions_map or not samples:
                 return jsonify({"error": "Invalid input"}), 400
             print(positions_map)
@@ -71,10 +74,11 @@ def fill_matrices():
                     print(dst);
                     distances[i][j] = dst
                     distances[j][i] = dst
+                    progress["percentage"] = i  / sz * 100 
                     elev_path = get_elevation_along_path(positions_map[i], positions_map[j], samples) if ( dst <= dist_thresh and dst != 0) else [1000] * samples
                     path_elevations[i][j] = elev_path
                     path_elevations[j][i] = elev_path[::-1]  # Reverse the elevation path for the opposite direction
-            print("distances", distances)
+                    
             return jsonify({
                 "distances": distances,
                 "path_elevations": path_elevations
@@ -93,6 +97,33 @@ def fill_matrices():
         print(5)
         return jsonify({'error': str(e)}), 500
     
+@app.route('/progress', methods=['GET','OPTIONS'])
+def get_progress():
+    def generate():
+        while True:
+            yield f"data: {json.dumps(progress)}\n\n"
+            time.sleep(1)  # Send progress updates every second
+    try:
+        if request.method == 'GET':
+            return Response(generate(), mimetype='text/event-stream')
+        
+        
+        elif request.method == 'OPTIONS':
+            # Handle preflight request
+            response_data = {'message': 'Preflight request successful'}
+            response = jsonify(response_data)
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
+            return response
+        else:
+            return jsonify({'error': 'Method not allowed'}), 405
+    except Exception as e:
+        print(5)
+        return jsonify({'error': str(e)}), 500
+    
+
+        
 
 if __name__ == '__main__':
     app.run(debug=True,port = 3000)

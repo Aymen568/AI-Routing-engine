@@ -70,8 +70,14 @@
         <div id="map-container" class="map-container">
             <script async defer src="https://maps.googleapis.com/maps/api/js?key=key&v=beta&libraries=drawing&callback=initMap"></script>
         </div>
-        <div id="loading-spinner" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000;">
-            <div class="spinner"></div>
+        <div id="progress-wrapper" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 300px; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.2); text-align: center;">
+            <div id="loading-spinner" style="margin-bottom: 10px;">
+                <div class="spinner"></div>
+            </div>
+            <div id="progress-bar-container" style="margin-bottom: 10px;">
+                <div id="progress-bar" style="background-color: #4caf50; height: 20px; width: 0%;"></div>
+            </div>
+            <div id="progress-text">0%</div>
         </div>
         <div id="line-info" style="display: none;">
             <span id="line-information"></span> 
@@ -448,9 +454,8 @@
             } catch (error) {
                 // Handle errors
                 console.error('Error calling Flask API:', error);
-        
-                // Optionally, return a default value or rethrow the error
-                return { distances: [], path_elevations: [] };
+                distances = [];
+                path_elevations =  [];
             }
         }
         
@@ -1083,8 +1088,11 @@
             // Retrieve the selected options from source and destination layers
             var selectedSourceLayers = ['Internet Source'];
             var selectedDestLayers = ['TOTEM_SA','SITEs','RDA'];
-            const spinner = document.getElementById("loading-spinner");
-            spinner.style.display = "block";
+            const progressWrapper = document.getElementById("progress-wrapper");
+            const progressBar = document.getElementById("progress-bar");
+            const progressText = document.getElementById("progress-text");
+            progressWrapper.style.display = "block";
+           
 
             var source_markers = [];
             var dest_markers = [];
@@ -1138,10 +1146,26 @@
                 marker_index.set(key, i);
             }
             console.log(marker_index)
-            // Fill matrices and process connections
+            const progressSource = new EventSource('http://127.0.0.1:3000/progress');
+            progressSource.onmessage = function (event) {
+                try {
+                    const progress = JSON.parse(event.data).percentage;
+                    progressText.textContent = `${Math.round(progress)}%`;
+                    progressBar.style.width = `${Math.round(progress)}%`;
+                } catch (e) {
+                    console.error('Error parsing progress update:', e);
+                }
+            };
+        
+            progressSource.onerror = function () {
+                console.error("Error receiving progress updates");
+                progressSource.close();
+            };
+
+
             await fill_matrices();
             console.log("Matrices filled, proceeding to compute possible links");
-            spinner.style.display = "none";
+            progressWrapper.style.display = "none";
 
         
             // Combine all markers into a single array and calculate possible links
