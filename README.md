@@ -15,23 +15,28 @@ This project focuses on optimizing network topologies by managing a variety of c
 
 The architecture diagram below illustrates the data flow and integration of technologies within this project:
 
-![Architecture](./media/github/tools.png)
+<p align="center">
+  <img src="/media/github/tools.png" alt="Architecture" width="600" />
+</p>
 
 - **Frontend (Client-Side):** Developed using HTML, CSS, and JavaScript, the front end provides an interactive user interface for data input, visualization, and decision-making. The Google Maps JavaScript API is a key component, allowing for the display of interactive maps, adding markers for network nodes, and visualizing potential connections.
 
 - **Backend (Server-Side):** Built using the Flask framework in Python, the backend handles data processing, optimization logic, and communication with external services to perform complex computations and network optimizations.
 
-- **Data Services Integration:** The Google Maps JavaScript API also serves as a data retrieval tool, enabling the front end to fetch geospatial data from Google’s servers. For example, it can call the Elevation Service to retrieve elevation profiles based on geographic coordinates. These requests are initiated from the client side and processed by Google’s backend services, with the results handled within the front-end JavaScript environment.
+- **Data Services Integration:** The Google Maps JavaScript API also serves as a data retrieval tool, enabling the front end to fetch geospatial data from Google’s servers. For example, it can call the Elevation Service to retrieve elevation profiles based on geographic coordinates. These requests are initiated from the sever side and processed by Google’s backend services, with the results handled within the front-end JavaScript environment.
 
 ## 🔗 Workflow
 
 The application is tailored to a specific use case. To achieve the desired results, the KML input file should have a predefined structure:
 
-![Directory Structure](/media/github/directories.png)
+<p align="center">
+  <img src="/media/github/directories.png" alt="Directory Structure" width="600" />
+</p>
 
 Each node in the network will have the following characteristics:
-
-![Node Characteristics](/media/github/characteristics.png)
+<p align="center">
+  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="600" />
+</p>
 
 The workflow of the application is detailed in the diagram below:
 
