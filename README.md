@@ -29,11 +29,14 @@ The architecture diagram below illustrates the data flow and integration of tech
 
 The application is tailored to a specific use case. To achieve the desired results, the KML input file should have a predefined structure:
 
-![Directory Structure](/media/github/directories.png)
+<p align="center">
+  <img src="/media/github/directories.png" alt="Directory Structure" width="600" />
+</p>
 
 Each node in the network will have the following characteristics:
-
-![Node Characteristics](/media/github/characteristics.png)
+<p align="center">
+  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="600" />
+</p>
 
 The workflow of the application is detailed in the diagram below:
 
