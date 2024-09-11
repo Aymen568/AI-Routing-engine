@@ -30,19 +30,19 @@ The architecture diagram below illustrates the data flow and integration of tech
 The application is designed for a specific use case. To achieve the desired results, the KML input file must follow a predefined structure:
 
 <p align="center">
-  <img src="/media/github/directories.png" alt="Directory Structure" width="600" />
+  <img src="/media/github/directories.png" alt="Directory Structure" width="300" />
 </p>
 
 Each network node will have the following characteristics:
 
 <p align="center">
-  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="600" />
+  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="300" />
 </p>
 
 The overall workflow of the application is illustrated below:
 
 <p align="center">
-  <img src="/media/github/workflow.png" alt="Application Workflow" width="600" />
+  <img src="/media/github/workflow.png" alt="Application Workflow" width="300" />
 </p>
 
 ### Backend Workflow
@@ -54,7 +54,7 @@ The overall workflow of the application is illustrated below:
 Detailed backend workflow:
 
 <p align="center">
-  <img src="/media/github/workflow_backend.png" alt="Backend Workflow" width="600" />
+  <img src="/media/github/workflow_backend.png" alt="Backend Workflow" width="300" />
 </p>
 
 1. **Process Input Data:** Read and parse the KML file to extract node information.
