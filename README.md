@@ -27,29 +27,43 @@ The architecture diagram below illustrates the data flow and integration of tech
 
 ## 🔗 Workflow
 
-The application is tailored to a specific use case. To achieve the desired results, the KML input file should have a predefined structure:
+The application is designed for a specific use case. To achieve the desired results, the KML input file must follow a predefined structure:
 
 <p align="center">
   <img src="/media/github/directories.png" alt="Directory Structure" width="600" />
 </p>
 
-Each node in the network will have the following characteristics:
+Each network node will have the following characteristics:
+
 <p align="center">
   <img src="/media/github/characteristics.png" alt="Node Characteristics" width="600" />
 </p>
 
-The workflow of the application is detailed in the diagram below:
+The overall workflow of the application is illustrated below:
 
-![Workflow](/media/github/workflow.png)
+<p align="center">
+  <img src="/media/github/workflow.png" alt="Application Workflow" width="600" />
+</p>
+
+### Backend Workflow
+
+- **`fill_matrices.py`:** This API retrieves elevation profiles for each possible link by interacting with the Google Maps API.
+
+- **`graph.py`:** This primary API is responsible for designing the network topology and minimizing the number of Totem points used.
+
+Detailed backend workflow:
+
+<p align="center">
+  <img src="/media/github/workflow_backend.png" alt="Backend Workflow" width="600" />
+</p>
 
 1. **Process Input Data:** Read and parse the KML file to extract node information.
 2. **Compute Possible Links:** Calculate links between nodes that do not exceed the specified threshold.
 3. **Customize Link Costs:** Adjust link costs to prioritize desired connections (e.g., better connections between Sites and Internet Sources or RDA).
 4. **Add Virtual Node:** Introduce a virtual node to connect all source nodes with zero cost.
 5. **Identify Connected Components:** Detect all connected components in the network.
-6. **Apply Steiner Tree Algorithm:** Apply the Steiner Tree algorithm to each connected component to optimize connections.
-7. **Generate Output List:** Transform the optimized network into a list format for further analysis or visualization.
-
+6. **Apply Steiner Tree Algorithm:** Optimize connections within each connected component using the Steiner Tree algorithm.
+7. **Generate Output List:** Convert the optimized network into a list format for further analysis or visualization.
 
 
 ### Prerequisites
