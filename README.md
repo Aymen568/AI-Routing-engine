@@ -30,19 +30,19 @@ The architecture diagram below illustrates the data flow and integration of tech
 The application is designed for a specific use case. To achieve the desired results, the KML input file must follow a predefined structure:
 
 <p align="center">
-  <img src="/media/github/directories.png" alt="Directory Structure" width="600" />
+  <img src="/media/github/directories.png" alt="Directory Structure" width="300" />
 </p>
 
 Each network node will have the following characteristics:
 
 <p align="center">
-  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="600" />
+  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="400" />
 </p>
 
 The overall workflow of the application is illustrated below:
 
 <p align="center">
-  <img src="/media/github/workflow.png" alt="Application Workflow" width="600" />
+  <img src="/media/github/workflow.png" alt="Application Workflow" width="400" />
 </p>
 
 ### Backend Workflow
@@ -54,7 +54,7 @@ The overall workflow of the application is illustrated below:
 Detailed backend workflow:
 
 <p align="center">
-  <img src="/media/github/workflow_backend.png" alt="Backend Workflow" width="600" />
+  <img src="/media/github/workflow_backend.png" alt="Backend Workflow" width="300" />
 </p>
 
 1. **Process Input Data:** Read and parse the KML file to extract node information.
@@ -69,21 +69,21 @@ Detailed backend workflow:
 ### Prerequisites
 
 Ensure all required libraries are installed by running:
-```bash
-pip install -r requirements.txt
+    - pip install -r requirements.txt
 
-#### 1-  Prerequisites:
-preuisit librairies are put under the requiremernts.txt file.
-Just run pip install -r requirements.txt
-
-#### 2-START THE BACKEND:
+#### START THE BACKEND:
 To start the backend and handle requests, navigate to the /API directory and run:
-```bash 
-python ./fill_data.py
-python ./graph.py
 
-##  End Results
+    - python ./fill_data.py
+    - python ./graph.py
+
+### End Results
 
 The Comprehensive Topology Planner provides an efficient solution for network optimization, enabling users to visualize and plan complex network topologies with diverse node types. By employing advanced algorithms and integrating geospatial data, the tool ensures optimal connectivity and performance. The final output includes an optimized network topology that meets specified criteria, facilitating enhanced decision-making and improved network management.
+
+<p align="center">
+  <img src="/media/github/results.png" alt="Topology results" width="450" style="display: inline-block; margin-right: 20px;" />
+  <img src="/media/github/node_char.png" alt="Router characteristics" width="480" style="display: inline-block;" />
+</p>
 
 For further details or to contribute to the project, please refer to the documentation or reach out to the project maintainers.
