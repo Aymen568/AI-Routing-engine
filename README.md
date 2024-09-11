@@ -15,7 +15,7 @@ This project focuses on optimizing network topologies by managing a variety of c
 
 The architecture diagram below illustrates the data flow and integration of technologies within this project:
 
-![Architecture](/media/github/tools.png)
+![Architecture](./media/github/tools.png)
 
 - **Frontend (Client-Side):** Developed using HTML, CSS, and JavaScript, the front end provides an interactive user interface for data input, visualization, and decision-making. The Google Maps JavaScript API is a key component, allowing for the display of interactive maps, adding markers for network nodes, and visualizing potential connections.
 
