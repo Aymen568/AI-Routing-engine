@@ -69,7 +69,9 @@ Detailed backend workflow:
 ### Prerequisites
 
 Ensure all required libraries are installed by running:
+
 ```bash
+
 pip install -r requirements.txt
 
 #### 1-  Prerequisites:
@@ -82,8 +84,17 @@ To start the backend and handle requests, navigate to the /API directory and run
 python ./fill_data.py
 python ./graph.py
 
-##  End Results
+
+
+### End Results
 
 The Comprehensive Topology Planner provides an efficient solution for network optimization, enabling users to visualize and plan complex network topologies with diverse node types. By employing advanced algorithms and integrating geospatial data, the tool ensures optimal connectivity and performance. The final output includes an optimized network topology that meets specified criteria, facilitating enhanced decision-making and improved network management.
+
+<p align="center">
+  <img src="/media/github/results.png" alt="Topology results" width="300" />
+</p>
+<p align="center">
+  <img src="/media/github/node_char.png" alt="Router characteristics" width="300" />
+</p>
 
 For further details or to contribute to the project, please refer to the documentation or reach out to the project maintainers.
