@@ -69,22 +69,13 @@ Detailed backend workflow:
 ### Prerequisites
 
 Ensure all required libraries are installed by running:
+    - pip install -r requirements.txt
 
-```bash
-
-pip install -r requirements.txt
-
-#### 1-  Prerequisites:
-preuisit librairies are put under the requiremernts.txt file.
-Just run pip install -r requirements.txt
-
-#### 2-START THE BACKEND:
+#### START THE BACKEND:
 To start the backend and handle requests, navigate to the /API directory and run:
-```bash 
-python ./fill_data.py
-python ./graph.py
 
-
+    - python ./fill_data.py
+    - python ./graph.py
 
 ### End Results
 
