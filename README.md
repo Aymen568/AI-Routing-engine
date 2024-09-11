@@ -23,7 +23,7 @@ The architecture diagram below illustrates the data flow and integration of tech
 
 - **Backend (Server-Side):** Built using the Flask framework in Python, the backend handles data processing, optimization logic, and communication with external services to perform complex computations and network optimizations.
 
-- **Data Services Integration:** The Google Maps JavaScript API also serves as a data retrieval tool, enabling the front end to fetch geospatial data from Google’s servers. For example, it can call the Elevation Service to retrieve elevation profiles based on geographic coordinates. These requests are initiated from the client side and processed by Google’s backend services, with the results handled within the front-end JavaScript environment.
+- **Data Services Integration:** The Google Maps JavaScript API also serves as a data retrieval tool, enabling the front end to fetch geospatial data from Google’s servers. For example, it can call the Elevation Service to retrieve elevation profiles based on geographic coordinates. These requests are initiated from the sever side and processed by Google’s backend services, with the results handled within the front-end JavaScript environment.
 
 ## 🔗 Workflow
 
