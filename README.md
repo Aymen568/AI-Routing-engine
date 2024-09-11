@@ -82,8 +82,8 @@ To start the backend and handle requests, navigate to the /API directory and run
 The Comprehensive Topology Planner provides an efficient solution for network optimization, enabling users to visualize and plan complex network topologies with diverse node types. By employing advanced algorithms and integrating geospatial data, the tool ensures optimal connectivity and performance. The final output includes an optimized network topology that meets specified criteria, facilitating enhanced decision-making and improved network management.
 
 <p align="center">
-  <img src="/media/github/results.png" alt="Topology results" width="400" style="display: inline-block; margin-right: 20px;" />
-  <img src="/media/github/node_char.png" alt="Router characteristics" width="400" style="display: inline-block;" />
+  <img src="/media/github/results.png" alt="Topology results" width="450" style="display: inline-block; margin-right: 20px;" />
+  <img src="/media/github/node_char.png" alt="Router characteristics" width="480" style="display: inline-block;" />
 </p>
 
 For further details or to contribute to the project, please refer to the documentation or reach out to the project maintainers.
