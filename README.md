@@ -36,13 +36,13 @@ The application is designed for a specific use case. To achieve the desired resu
 Each network node will have the following characteristics:
 
 <p align="center">
-  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="300" />
+  <img src="/media/github/characteristics.png" alt="Node Characteristics" width="400" />
 </p>
 
 The overall workflow of the application is illustrated below:
 
 <p align="center">
-  <img src="/media/github/workflow.png" alt="Application Workflow" width="300" />
+  <img src="/media/github/workflow.png" alt="Application Workflow" width="400" />
 </p>
 
 ### Backend Workflow
