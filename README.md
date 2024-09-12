@@ -86,4 +86,4 @@ The Comprehensive Topology Planner provides an efficient solution for network op
   <img src="/media/github/node_char.png" alt="Router characteristics" width="480" style="display: inline-block;" />
 </p>
 
-For further details or to contribute to the project, please refer to the documentation or reach out to the project maintainers.
+
