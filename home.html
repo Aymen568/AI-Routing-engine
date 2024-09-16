@@ -68,7 +68,7 @@
     </div>
     <section id="sensorContainer" class="flex-container">
         <div id="map-container" class="map-container">
-            <script async defer src="https://maps.googleapis.com/maps/api/js?key=key&v=beta&libraries=drawing&callback=initMap"></script>
+            <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBeya4HQeQc6Ps1nROlox3qrQV3fbrJRAc&v=beta&libraries=drawing&callback=initMap"></script>
         </div>
         <div id="progress-wrapper" style="display:none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 1000; width: 300px; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.2); text-align: center;">
             <div id="loading-spinner" style="margin-bottom: 10px;">
@@ -188,11 +188,48 @@
             if (!isNaN(newHeight)) {
                 antenna_heights[index] = newHeight;  // Update the height
                 alert(`Height updated to ${newHeight} for marker at index ${index}`);
-                
+                updatepossibleconnections(index);
                 // Hide the height form after updating
+                console.log(index);
                 document.getElementById('heightForm').style.display = 'none';
             } else {
                 alert('Please enter a valid number for the new height.');
+            }
+        }
+        
+        function updatepossibleconnections(index){
+            let sz = positions.length;
+            for (let j = 0; j < sz ; ++j) {
+                if (j !== index){
+                    // Find the start and end positions in the positions_map
+                    let pathClear = true;
+                    let dst = distances[j][index];
+                    if (dst <= dist_thresh) {
+                        const path_elevation = path_elevations[index][j];
+                        const elevationStart = positions[index][2] + antenna_heights[index];
+                        const elevationEnd = positions[j][2]+ antenna_heights[j];
+                        const labels = Array.from({ length: path_elevation.length }, (_, k) => (dst / (samples-1) * k ));
+                        for (let k = 1; k < path_elevation.length - 1; k++) {
+                            let elevation = path_elevation[k];
+                            let interpolatedElevation  = elevationStart + ((elevationEnd - elevationStart) * (k / (samples -1) ));
+                            // TO ACTIVATE THE FRESNEL ZONE VERIFICATION
+                            // interpolatedElevation -=  (17.32 * Math.sqrt(((dst / (samples-1) * k ) * (dst -(dist / (samples-1) * k ) * 0.06/ dst);
+                            if (elevation >= interpolatedElevation) {
+                                pathClear = false;
+                                break;
+                            }
+                        }
+                        if (pathClear) {
+                            console.log(final_connections[index].includes(j));
+                            if (!final_connections[index].includes(j)) {
+                                final_connections[index].push(j);
+                            }
+                            if (!final_connections[j].includes(index)) {
+                                final_connections[j].push(index);
+                            }
+                        }
+                    } 
+                }
             }
         }
         
