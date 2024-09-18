@@ -9,6 +9,7 @@
     <script src = "js/geoxml3.js" ></script>
     <script src = "https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src = "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.6.0/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
 </head>
 <body>
 <!-- ======= Header ======= -->
@@ -25,9 +26,18 @@
                 <div class="upload_kml_file" style="display: none;" >
                     <form enctype="multipart/form-data">
                         <input id="file" name="file" type="file" />
-                        <button  type="button" id="upload_file">Upload KML file</button>
+                        <button  type="button" id="load_kml_file">Upload KML file</button>
                     </form>
                 </div>
+
+                <div class="upload_csv_file" style="display: none;">
+                    <form enctype="multipart/form-data">
+                        <input id="csv_file" name="file" type="file" accept=".csv" />
+                        <button type="button" id="upload_csv_file">Upload CSV file</button>
+                    </form>
+                </div>
+
+
                 <div class="upload_json_file" style="display: none;" >
                     <input type="file" id="importFromFile" accept=".json" />
                     <button id="importButton" >Upload Json File</button>
@@ -41,9 +51,6 @@
                 <div id="layer-control" style="display: none;">
                         <button type="button" id="processLayers">Process Layers</button>
                 </div>
-                <div class="other_buttons" style="display: none;">
-                    <button id="exportToFile" >Save and Export to File</button>
-                </div>
                 <div class="topology-container" style="display: none;" >
                     <button type="button" id="generate-topology">Generate Topology</button>
                 </div>
@@ -56,6 +63,9 @@
                         <input type="number" id="newHeight" step="1"><br>
                         <button id="updateHeightButton">Update Height</button>
                     </div>
+                </div>
+                <div class="other_buttons" style="display: none;">
+                    <button id="exportToFile" >Save and Export to File</button>
                 </div>
                 <div class="antenna_characteristics" style="display: none;">
                     <button type="button" id="generate-characteristics">Topology characteristics</button>
@@ -113,7 +123,6 @@
     let drawingManager;
     let markers = [];
     let lines   = [];
-    let triangles= [];
     let positions = [];
     let antenna_heights= [];
     let positions_map = [];
@@ -153,8 +162,94 @@
     let globalVariable;
     let new_project = true;
     let marker2update = false;
+    let hauteur_map = new Map();
     const position = { lat: 24.6986413, lng: 44.0534141 };
     async function initMap() {
+
+        function processCSVFile() {
+            const fileInput = document.getElementById('csv_file');
+            const file = fileInput.files[0];
+        
+            // Ensure a file is selected
+            if (!file) {
+                alert('Please select a CSV file to upload.');
+                return;
+            }
+        
+            // Initialize hauteur_map if not already done
+            if (typeof hauteur_map === 'undefined') {
+                hauteur_map = new Map(); // Assuming `hauteur_map` is a global Map object
+            }
+        
+            // Read and parse the CSV file
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvData = e.target.result;
+                console.log("CSV Data Loaded:", csvData); // Debug: Check the loaded CSV data
+        
+                // Parse CSV data using PapaParse
+                Papa.parse(csvData, {
+                    header: true,  // Treat the first row as headers
+                    skipEmptyLines: true,
+                    complete: function(results) {
+                        console.log("Parsed CSV Results:", results.data); // Debug: Check parsed results
+        
+                        // Ensure results.data is an array
+                        if (!Array.isArray(results.data)) {
+                            console.error("Parsed data is not an array:", results.data);
+                            return;
+                        }
+        
+                        // Check if results.data is not empty
+                        if (results.data.length === 0) {
+                            console.log("No data found in CSV file.");
+                            return;
+                        }
+        
+                        // Loop through the parsed data
+                        results.data.forEach((row, index) => {
+                            console.log(`Processing row ${index + 1}:`, row);
+        
+                            // Extract and validate the values for Hauteur support, Latitude, and Longitude
+                            let hauteurSupport = row["Hauteur support "].trim();
+                             // Trim any extra whitespace
+                            let latitude = parseFloat(row['Latitude']);
+                            let longitude = parseFloat(row['Longitude']);
+                            latitude = parseFloat(latitude.toFixed(5));
+                            longitude = parseFloat(longitude.toFixed(5));
+        
+                            // Handle 'Hauteur support ' which can be an integer or '-'
+                            if (hauteurSupport === '-') {
+                                hauteurSupport = 10;  // Set to null if it is '-'
+                            } else {
+                                hauteurSupport =parseFloat(hauteurSupport, 10);
+                                hauteurSupport = Math.floor(hauteurSupport);  
+                                // Convert to integer
+                                console.log(hauteurSupport)
+                                if (isNaN(hauteurSupport)) hauteurSupport = null; // Handle invalid numbers
+                            }
+        
+                            // Check if Latitude and Longitude are valid floats
+                            if (!isNaN(latitude) && !isNaN(longitude)) {
+                                console.log('Valid Latitude:', latitude, 'Longitude:', longitude);
+                                // Update hauteur_map with parsed values
+                                hauteur_map.set(`${latitude},${longitude}`, hauteurSupport);
+                            } else {
+                                console.log('Invalid Latitude or Longitude');
+                            }
+                        });
+                    },
+                    error: function(error) {
+                        console.error("Error parsing CSV:", error);
+                    }
+                });
+            };
+        
+            // Read the file as text
+            reader.readAsText(file);
+            document.querySelector('.upload_csv_file').style.display = 'none';
+        }
+        
 
         function handleMarkerClick(marker) {
             if (!marker1) {
@@ -199,6 +294,7 @@
         
         function updatepossibleconnections(index){
             let sz = positions.length;
+
             for (let j = 0; j < sz ; ++j) {
                 if (j !== index){
                     // Find the start and end positions in the positions_map
@@ -219,13 +315,20 @@
                                 break;
                             }
                         }
-                        if (pathClear) {
+                        let index1 = Math.min(index, j);
+                        let index2 = Math.max(index, j);
+                        if (pathClear){
                             console.log(final_connections[index].includes(j));
-                            if (!final_connections[index].includes(j)) {
-                                final_connections[index].push(j);
+                            if (!final_connections[index1].includes(index2)) {
+                                final_connections[index1].push(index2);
                             }
-                            if (!final_connections[j].includes(index)) {
-                                final_connections[j].push(index);
+                        }
+                        else{
+                            if (final_connections[index1].includes(index2)) {
+                                const index_occ = final_connections[index1].indexOf(index2);
+                                if (index_occ > -1) {
+                                    final_connections[index1].splice(index_occ, 1);
+                                }
                             }
                         }
                     } 
@@ -293,7 +396,7 @@
             console.log(xmlDoc);
             
             const folderColors = {
-                'TOTEM_SA': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
+                'TOTEM-SA': 'http://maps.google.com/mapfiles/ms/icons/red-dot.png',
                 'SITEs': 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png',
                 'RDA': 'http://maps.google.com/mapfiles/ms/icons/orange-dot.png',
                 'Internet Source': 'http://maps.google.com/mapfiles/ms/icons/blue-dot.png'
@@ -325,7 +428,10 @@
                     const latitude = parseFloat(coordinates[1]);
                     const longitude = parseFloat(coordinates[0]);
                     const maxHeightElement = placemark.querySelector('SimpleData[name="Maximum Height (m)"]');
-                    var antenna_height = maxHeightElement ? parseFloat(maxHeightElement.textContent) : 5;
+                    var antenna_height = maxHeightElement ? parseFloat(maxHeightElement.textContent) : 10;
+                    if (folderName === 'RDA') {
+                        antenna_height = 20;
+                    }
                     if (new_project){
                         var elevation = await getElevation({ lat: latitude, lng: longitude });
                         if (!layers_positions_map[folderName]) {
@@ -367,6 +473,8 @@
                     markers.push(marker);
                 }
             }
+            console.log(layers);
+            console.log(layers["TOTEM-SA"]);
         }
 
         function addLayerControls(folderName) {
@@ -451,7 +559,6 @@
                         }
                         if (pathClear) {
                             total_connections[i].push(j);
-                            total_connections[j].push(i);
                         }
                     } 
                 }
@@ -520,12 +627,6 @@
                 line.setMap(null);
             }
             lines = [];
-        
-            // Clear all triangles from the map
-            for (let triangle of triangles) {
-                triangle.setMap(null);
-            }
-            triangles = []
             roles = [];
             horizontal_azimuths= [];
             vertical_azimuths = []
@@ -582,25 +683,6 @@
                                 if (horizontal_az >= 90) {
                                     rt_type = "Sector D120";
                                 }
-                                const end1 = symmetricPoint(positions_map[connection_boundaries[i][0]], positions_map[i]);
-                                const end2 = symmetricPoint(positions_map[connection_boundaries[i][1]], positions_map[i]);
-                                const triangleCoords = [
-                                    positions_map[i], 
-                                    end1, 
-                                    end2
-                                ];
-                                const color = getRandomColor();
-                                const triangle = new google.maps.Polygon({
-                                    paths: triangleCoords,
-                                    strokeColor: color,
-                                    strokeOpacity: 0.8,
-                                    strokeWeight: 2,
-                                    fillColor: color,
-                                    fillOpacity: 0.35,
-                                    clickable: false    
-                                });
-                                triangle.setMap(map);
-                                triangles.push(triangle);
                             }
                         }
                         if (i>= sz_src && connections[i]!== -1) {
@@ -1082,6 +1164,7 @@
             dist_thresh = parseInt(this.value, 10);  // Convert to integer
         };
         document.getElementById('new_project').addEventListener('click', function () {
+            document.querySelector('.upload_csv_file').style.display = 'block';
             document.querySelector('.upload_kml_file').style.display = 'block';
             document.querySelector('#layer-control').style.display = 'block';
             document.querySelector('.dist_threshold').style.display = 'block';
@@ -1100,11 +1183,12 @@
             document.querySelector('.download_button').style.display = 'block';
             document.querySelector('.customizenode').style.display = 'block';
             document.querySelector('.first-options').style.display = 'none';
+            document.querySelector('.other_buttons').style.display = 'block';
 
         });
 
 
-        document.getElementById('upload_file').addEventListener('click', function () {
+        document.getElementById('load_kml_file').addEventListener('click', function () {
             var fileInput = document.getElementById('file');
             var file = fileInput.files[0];
             if (!file) {
@@ -1120,11 +1204,13 @@
             
         });
 
+        document.getElementById('upload_csv_file').addEventListener('click', processCSVFile);
+
         document.getElementById('processLayers').addEventListener('click', async function () {
     
             // Retrieve the selected options from source and destination layers
             var selectedSourceLayers = ['Internet Source'];
-            var selectedDestLayers = ['TOTEM_SA','SITEs','RDA'];
+            var selectedDestLayers = ['TOTEM-SA','SITEs','RDA'];
             const progressWrapper = document.getElementById("progress-wrapper");
             const progressBar = document.getElementById("progress-bar");
             const progressText = document.getElementById("progress-text");
@@ -1141,10 +1227,12 @@
                 source_markers = source_markers.concat(layers[selectedSourceLayers[i]]);
                 source_labels = source_labels.concat(Array(layers[selectedSourceLayers[i]].length).fill(selectedSourceLayers[i]));
             }
-        
+            
             // Populate dest_markers and dest_labels based on the selected destination layers
             for (let j = 0; j < selectedDestLayers.length; j++) {
                 dest_markers = dest_markers.concat(layers[selectedDestLayers[j]]);
+                console.log(dest_markers);
+                console.log(layers[selectedDestLayers[j]])
                 dest_labels = dest_labels.concat(Array(layers[selectedDestLayers[j]].length).fill(selectedDestLayers[j]));
             }
         
@@ -1173,16 +1261,35 @@
                 delete antenna_heights_per_layer[total_labels[i]]; // Prevent duplication in subsequent iterations
             }
             
+            
             console.log(positions);
             console.log(positions_map);
             console.log(marker_names);
+            let rounded_map = new Map();
             for (let i = 0 ; i < positions.length; ++i){
                 const l1 = positions_map[i].lat;
                 const l2 = positions_map[i].lng;
-                const key = `${l1},${l2}`;
+                let key = `${l1},${l2}`;
+                const rounded_l1 = parseFloat(l1.toFixed(5));
+                const rounded_l2 = parseFloat(l2.toFixed(5));
                 marker_index.set(key, i);
+                key = `${rounded_l1},${rounded_l2}`;
+                rounded_map.set(key, i);
             }
+
             console.log(marker_index)
+            for (let [key, value] of hauteur_map.entries()) {
+                console.log(key);
+                console.log(Array.from(rounded_map.keys()));
+
+                let ht_index = rounded_map.get(key);
+                console.log(ht_index);  // Accessing the value from marker_index map
+                if (ht_index !== undefined) {  // Ensure the index exists
+                    antenna_heights[ht_index] = value;
+                    console.log(antenna_heights[ht_index]);  // Use value from hauteur_map
+                }
+            }
+
             const progressSource = new EventSource('http://127.0.0.1:3000/progress');
             progressSource.onmessage = function (event) {
                 try {
@@ -1193,7 +1300,7 @@
                     console.error('Error parsing progress update:', e);
                 }
             };
-        
+            
             progressSource.onerror = function () {
                 console.error("Error receiving progress updates");
                 progressSource.close();

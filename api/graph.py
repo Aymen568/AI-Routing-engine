@@ -152,7 +152,7 @@ def build_graph(n,total_sz,distances, possible_connections,total_labels):
             if (total_labels[i] ==  'SITEs'  and  total_labels[j] ==  'SITEs'):
                 cost += 100
             else:
-                if (total_labels[i] ==  'TOTEM_SA'  or  total_labels[j] ==  'TOTEM_SA'): 
+                if (total_labels[i] ==  'TOTEM-SA'  or  total_labels[j] ==  'TOTEM-SA'): 
                     cost +=  10000
                 if (total_labels[i] ==  'SITEs'  or  total_labels[j] ==  'SITEs'):
                     cost +=  100

@@ -71,14 +71,13 @@ def fill_matrices():
                 print(i)
                 for j in range(i + 1, sz):
                     dst = haversine_distance(positions_map[i], positions_map[j])
-                    print(dst);
+                    print(dst)
                     distances[i][j] = dst
                     distances[j][i] = dst
                     progress["percentage"] = i  / sz * 100 
                     elev_path = get_elevation_along_path(positions_map[i], positions_map[j], samples) if ( dst <= dist_thresh and dst != 0) else [1000] * samples
                     path_elevations[i][j] = elev_path
                     path_elevations[j][i] = elev_path[::-1]  # Reverse the elevation path for the opposite direction
-                    
             return jsonify({
                 "distances": distances,
                 "path_elevations": path_elevations
@@ -94,7 +93,7 @@ def fill_matrices():
         else:
             return jsonify({'error': 'Method not allowed'}), 405
     except Exception as e:
-        print(5)
+        print(e)
         return jsonify({'error': str(e)}), 500
     
 @app.route('/progress', methods=['GET','OPTIONS'])
